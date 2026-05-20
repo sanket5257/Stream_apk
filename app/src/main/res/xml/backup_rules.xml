@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Don't back up the encrypted stream key DataStore. -->
+    <exclude domain="file" path="datastore/secure_prefs.preferences_pb" />
+</full-backup-content>

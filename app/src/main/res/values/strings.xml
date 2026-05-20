@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StreamForge</string>
+    <string name="scaffolding_ready">Project scaffolding ready. Build phases up next.</string>
+
+    <!-- Streaming defaults -->
+    <string name="default_rtmp_url">rtmp://a.rtmp.youtube.com/live2/</string>
+
+    <!-- Foreground service -->
+    <string name="notif_channel_name">Live streaming</string>
+    <string name="notif_channel_desc">Shown while you are live on YouTube.</string>
+    <string name="notif_live_title">Live on YouTube</string>
+    <string name="notif_live_text">Tap to return to the stream</string>
+    <string name="notif_stop_action">Stop</string>
+</resources>
