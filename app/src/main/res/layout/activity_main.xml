@@ -27,9 +27,20 @@
         android:layout_marginTop="8dp"
         android:text="@string/scaffolding_ready"
         android:textAppearance="?attr/textAppearanceBodyMedium"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/btnOpenStream"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/title" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnOpenStream"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/open_stream"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/subtitle" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

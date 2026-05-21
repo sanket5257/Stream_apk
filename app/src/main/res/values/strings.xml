@@ -6,6 +6,11 @@
     <!-- Streaming defaults -->
     <string name="default_rtmp_url">rtmp://a.rtmp.youtube.com/live2/</string>
 
+    <!-- Phase 2A - Camera Preview -->
+    <string name="open_stream">Open Stream</string>
+    <string name="switch_camera">Switch</string>
+    <string name="permission_required">Camera and microphone permissions are required</string>
+
     <!-- Foreground service -->
     <string name="notif_channel_name">Live streaming</string>
     <string name="notif_channel_desc">Shown while you are live on YouTube.</string>
