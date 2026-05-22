@@ -79,6 +79,14 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    // Output APK filename: streamforge.apk (lands in apk/debug/ or apk/release/).
+    applicationVariants.all {
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl)
+                .outputFileName = "streamforge.apk"
+        }
+    }
 }
 
 dependencies {
