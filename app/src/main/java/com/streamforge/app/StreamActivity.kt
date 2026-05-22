@@ -20,8 +20,11 @@ import com.pedro.encoder.input.video.CameraHelper
 import com.pedro.library.rtmp.RtmpCamera2
 import com.streamforge.app.databinding.ActivityStreamBinding
 import com.streamforge.app.overlay.OverlayItem
+import com.streamforge.app.overlay.OverlayRenderer
 import com.streamforge.app.overlay.OverlayStore
 import com.streamforge.app.service.StreamService
+import com.streamforge.app.stream.AudioLevelEffect
+import com.pedro.library.util.FpsListener
 import com.streamforge.app.storage.StreamConfig
 import com.streamforge.app.storage.StreamPrefs
 import com.streamforge.app.stream.StreamManager
@@ -44,6 +47,8 @@ class StreamActivity : AppCompatActivity() {
     private lateinit var streamManager: StreamManager
     private lateinit var streamPrefs: StreamPrefs
     private lateinit var overlayStore: OverlayStore
+    private var overlayRenderer: OverlayRenderer? = null
+    private val audioLevelEffect = AudioLevelEffect()
     private var streamConfig: StreamConfig? = null
     private var isMuted = false
     
@@ -72,6 +77,17 @@ class StreamActivity : AppCompatActivity() {
         override fun run() {
             updateAudioLevel()
             audioLevelHandler.postDelayed(this, 100) // Update every 100ms
+        }
+    }
+
+    // Phase 7: stats HUD
+    private val statsHandler = Handler(Looper.getMainLooper())
+    @Volatile private var currentFps: Int = 0
+    private var liveStartedAtMs: Long = 0L
+    private val statsRunnable = object : Runnable {
+        override fun run() {
+            updateStatsHud()
+            statsHandler.postDelayed(this, 1000)
         }
     }
 
@@ -113,18 +129,35 @@ class StreamActivity : AppCompatActivity() {
     private fun initializeCamera() {
         // Initialize StreamManager first (will be set as ConnectChecker)
         streamManager = StreamManager(null)
-        
+
         // Initialize RtmpCamera2 with OpenGlView and StreamManager as ConnectChecker
         rtmpCamera = RtmpCamera2(binding.openGlView, streamManager)
-        
+
         // Set the camera instance in StreamManager
         streamManager.setCamera(rtmpCamera)
+
+        // Phase 6: bridge overlay model → RootEncoder filter pipeline.
+        overlayRenderer = OverlayRenderer(applicationContext, rtmpCamera)
+        setupOverlayEditor()
+
+        // Phase 7: attach a pass-through PCM effect so the level meter reads real RMS,
+        // not a fake animation.
+        rtmpCamera.setCustomAudioEffect(audioLevelEffect)
+
+        // Phase 7: encoder-side fps for the stats HUD.
+        rtmpCamera.setFpsListener(FpsListener.Callback { fps -> currentFps = fps })
+
+        // Phase 7: hand StreamManager the AudioManager so it can pin the preferred mic.
+        streamManager.audioManager =
+            getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
 
         // Set up surface callbacks
         binding.openGlView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
                 // Start preview when surface is ready
                 rtmpCamera.startPreview(CameraHelper.Facing.BACK)
+                // Apply persisted overlays now that the GL pipeline is alive.
+                loadAndApplyOverlays()
                 // Start audio level monitoring
                 startAudioLevelMonitoring()
             }
@@ -233,10 +266,11 @@ class StreamActivity : AppCompatActivity() {
                 binding.tvStreamStatus.text = getString(R.string.status_idle)
                 binding.tvStreamStatus.setTextColor(Color.GRAY)
                 binding.btnGoLive.text = getString(R.string.go_live)
-                binding.btnGoLive.backgroundTintList = 
+                binding.btnGoLive.backgroundTintList =
                     android.content.res.ColorStateList.valueOf(Color.parseColor("#E53935"))
                 binding.btnSwitchCamera.isEnabled = true
                 binding.btnMuteToggle.isEnabled = true
+                stopStatsHud()
             }
             is StreamState.Connecting -> {
                 binding.tvStreamStatus.text = getString(R.string.status_connecting)
@@ -248,19 +282,21 @@ class StreamActivity : AppCompatActivity() {
                 binding.tvStreamStatus.text = getString(R.string.status_live)
                 binding.tvStreamStatus.setTextColor(Color.RED)
                 binding.btnGoLive.text = getString(R.string.stop)
-                binding.btnGoLive.backgroundTintList = 
+                binding.btnGoLive.backgroundTintList =
                     android.content.res.ColorStateList.valueOf(Color.DKGRAY)
                 binding.btnSwitchCamera.isEnabled = false
+                startStatsHud()
             }
             is StreamState.Failed -> {
                 binding.tvStreamStatus.text = getString(R.string.status_failed, state.reason)
                 binding.tvStreamStatus.setTextColor(Color.RED)
                 binding.btnGoLive.text = getString(R.string.go_live)
-                binding.btnGoLive.backgroundTintList = 
+                binding.btnGoLive.backgroundTintList =
                     android.content.res.ColorStateList.valueOf(Color.parseColor("#E53935"))
                 binding.btnSwitchCamera.isEnabled = true
                 binding.btnMuteToggle.isEnabled = true
                 Toast.makeText(this, "Stream failed: ${state.reason}", Toast.LENGTH_LONG).show()
+                stopStatsHud()
             }
         }
     }
@@ -291,36 +327,76 @@ class StreamActivity : AppCompatActivity() {
 
     private fun updateAudioLevel() {
         if (!isMuted && ::rtmpCamera.isInitialized && rtmpCamera.isOnPreview) {
-            try {
-                // Since RootEncoder doesn't expose direct audio level access,
-                // we'll show a visual indicator that mic is active
-                // The bar will animate to show the mic is working
-                val currentProgress = binding.audioLevelBar.progress
-                
-                // Create a pulsing effect to show mic is active
-                val targetProgress = if (currentProgress < 50) {
-                    currentProgress + (Math.random() * 15).toInt()
-                } else {
-                    currentProgress - (Math.random() * 10).toInt()
-                }
-                
-                binding.audioLevelBar.progress = targetProgress.coerceIn(30, 70)
-            } catch (e: Exception) {
-                // If there's any error, show minimal activity
-                binding.audioLevelBar.progress = 0
-            }
+            binding.audioLevelBar.progress = audioLevelEffect.levelPercent
         } else {
             binding.audioLevelBar.progress = 0
         }
+    }
+
+    private fun startStatsHud() {
+        if (liveStartedAtMs == 0L) liveStartedAtMs = System.currentTimeMillis()
+        binding.tvStatsHud.visibility = android.view.View.VISIBLE
+        statsHandler.removeCallbacks(statsRunnable)
+        statsHandler.post(statsRunnable)
+    }
+
+    private fun stopStatsHud() {
+        statsHandler.removeCallbacks(statsRunnable)
+        binding.tvStatsHud.visibility = android.view.View.GONE
+        liveStartedAtMs = 0L
+        currentFps = 0
+    }
+
+    private fun updateStatsHud() {
+        if (!::rtmpCamera.isInitialized) return
+        val kbps = try { rtmpCamera.bitrate / 1024 } catch (_: Exception) { 0 }
+        val uptimeMs = if (liveStartedAtMs > 0) System.currentTimeMillis() - liveStartedAtMs else 0L
+        binding.tvStatsHud.text = getString(R.string.hud_format, kbps, currentFps, formatUptime(uptimeMs))
+    }
+
+    private fun formatUptime(ms: Long): String {
+        val totalSeconds = ms / 1000
+        val h = totalSeconds / 3600
+        val m = (totalSeconds % 3600) / 60
+        val s = totalSeconds % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
     }
     
     private fun showOverlayManager() {
         val bottomSheet = OverlayManagerBottomSheet.newInstance()
         bottomSheet.setOnOverlaysChangedListener { overlays ->
-            // Overlays changed - in Phase 6 we'll update the RootEncoder filters here
-            // For now, just log or show a toast
+            // Persisted store changed (add / delete / visibility / text edit).
+            // Push the new list to both the gesture surface and the filter pipeline.
+            binding.overlayEditor.setItems(overlays)
+            overlayRenderer?.applyOverlays(overlays)
         }
         bottomSheet.show(supportFragmentManager, OverlayManagerBottomSheet.TAG)
+    }
+
+    private fun setupOverlayEditor() {
+        // Real preview underneath — only show selection/outline, not filled placeholders.
+        binding.overlayEditor.showPlaceholders = false
+        binding.overlayEditor.setItemChangeListener { item ->
+            // Live-update path: a drag / pinch / rotate gesture finished a frame.
+            overlayRenderer?.updateOverlay(item)
+            lifecycleScope.launch {
+                try {
+                    overlayStore.updateOverlay(item)
+                } catch (_: Exception) { }
+            }
+        }
+    }
+
+    private fun loadAndApplyOverlays() {
+        lifecycleScope.launch {
+            val overlays = try {
+                overlayStore.loadOverlays()
+            } catch (_: Exception) {
+                emptyList()
+            }
+            binding.overlayEditor.setItems(overlays)
+            overlayRenderer?.applyOverlays(overlays)
+        }
     }
 
     override fun onPause() {
@@ -340,13 +416,17 @@ class StreamActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopAudioLevelMonitoring()
-        
+        stopStatsHud()
+
+        overlayRenderer?.release()
+        overlayRenderer = null
+
         // Unbind from service
         if (isServiceBound) {
             unbindService(serviceConnection)
             isServiceBound = false
         }
-        
+
         // Note: We don't stop the stream here - the service keeps it running
         // Only stop if user explicitly taps Stop button
     }

@@ -67,6 +67,42 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Phase 7: Backup RTMP URL (optional) -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilBackupRtmpUrl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/backup_rtmp_url_label"
+            android:layout_marginBottom="16dp"
+            app:errorEnabled="true">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etBackupRtmpUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri"
+                android:singleLine="true" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Phase 7: Microphone source -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilMicSource"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/mic_source_label"
+            android:layout_marginBottom="16dp"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+
+            <AutoCompleteTextView
+                android:id="@+id/actvMicSource"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none"
+                android:editable="false" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- Resolution Dropdown -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/tilResolution"

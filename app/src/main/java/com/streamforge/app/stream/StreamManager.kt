@@ -1,5 +1,6 @@
 package com.streamforge.app.stream
 
+import android.media.AudioManager
 import com.pedro.common.ConnectChecker
 import com.pedro.library.rtmp.RtmpCamera2
 import com.streamforge.app.storage.StreamConfig
@@ -18,18 +19,23 @@ class StreamManager(
     private val _state = MutableStateFlow<StreamState>(StreamState.Idle)
     val state: StateFlow<StreamState> = _state.asStateFlow()
 
+    /**
+     * Phase 7: set by StreamActivity so external-mic selection works in the service too.
+     */
+    var audioManager: AudioManager? = null
+
     fun setCamera(camera: RtmpCamera2) {
         this.rtmpCamera = camera
     }
 
     /**
-     * Start streaming to YouTube with the given configuration.
+     * Start streaming with the given configuration. By default uses the primary URL;
+     * pass [useBackup] = true to dial the backup URL (Phase 7 failover).
      */
-    fun startStream(config: StreamConfig) {
+    fun startStream(config: StreamConfig, useBackup: Boolean = false) {
         val camera = rtmpCamera ?: return
         _state.value = StreamState.Connecting
 
-        // Prepare video encoder (positional arguments)
         val videoPrepared = camera.prepareVideo(
             config.width,
             config.height,
@@ -39,7 +45,6 @@ class StreamManager(
             0  // rotation
         )
 
-        // Prepare audio encoder (positional arguments)
         val audioPrepared = camera.prepareAudio(
             config.audioBitrateKbps * 1024,
             44100,
@@ -53,14 +58,22 @@ class StreamManager(
             return
         }
 
-        // Build RTMP URL (server + key)
-        val rtmpUrl = if (config.rtmpUrl.endsWith("/")) {
-            config.rtmpUrl + config.streamKey
-        } else {
-            config.rtmpUrl + "/" + config.streamKey
+        // Phase 7: route to external mic if the user picked one. Must be between
+        // prepareAudio (creates AudioRecord) and startStream (starts recording).
+        audioManager?.let { am ->
+            if (config.preferredMicId > 0) {
+                MicAudioHelper.applyPreferredDevice(camera, config.preferredMicId, am)
+            }
         }
 
-        // Start streaming
+        val base = if (useBackup && config.backupRtmpUrl.isNotBlank()) {
+            config.backupRtmpUrl
+        } else {
+            config.rtmpUrl
+        }
+        val rtmpUrl = if (base.endsWith("/")) base + config.streamKey
+                      else "$base/${config.streamKey}"
+
         camera.startStream(rtmpUrl)
     }
 

@@ -40,6 +40,8 @@ class StreamService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var streamManager: StreamManager? = null
     private var retryCount = 0
+    private var usingBackup = false
+    private var backupExhausted = false
     private var currentConfig: StreamConfig? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     
@@ -88,6 +90,8 @@ class StreamService : Service() {
         Log.d(TAG, "Starting streaming service")
         currentConfig = config
         retryCount = 0
+        usingBackup = false
+        backupExhausted = false
         
         // Acquire wake lock to keep CPU running
         acquireWakeLock()
@@ -169,12 +173,22 @@ class StreamService : Service() {
     private fun handleStreamState(state: StreamState) {
         when (state) {
             is StreamState.Failed -> {
+                val hasBackup = currentConfig?.backupRtmpUrl?.isNotBlank() == true
                 if (retryCount < MAX_RETRY_COUNT) {
                     retryCount++
-                    Log.d(TAG, "Stream failed, attempting reconnect $retryCount/$MAX_RETRY_COUNT")
+                    Log.d(TAG, "Stream failed; retry $retryCount/$MAX_RETRY_COUNT" +
+                            if (usingBackup) " (backup)" else " (primary)")
+                    scheduleReconnect()
+                } else if (hasBackup && !usingBackup && !backupExhausted) {
+                    // Primary exhausted — flip to backup URL and try MAX_RETRY_COUNT more times.
+                    Log.w(TAG, "Primary exhausted; switching to backup URL")
+                    usingBackup = true
+                    retryCount = 1
                     scheduleReconnect()
                 } else {
-                    Log.e(TAG, "Max retry attempts reached, stopping service")
+                    if (usingBackup) backupExhausted = true
+                    Log.e(TAG, "All retry attempts exhausted on " +
+                            (if (usingBackup) "backup" else "primary") + " — stopping service")
                     stopStreaming()
                     stopSelf()
                 }
@@ -227,8 +241,8 @@ class StreamService : Service() {
         
         serviceScope.launch {
             delay(delayMs)
-            Log.d(TAG, "Attempting reconnect after ${delayMs}ms delay")
-            streamManager?.startStream(config)
+            Log.d(TAG, "Attempting reconnect after ${delayMs}ms delay (backup=$usingBackup)")
+            streamManager?.startStream(config, useBackup = usingBackup)
         }
     }
 

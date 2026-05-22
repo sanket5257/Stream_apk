@@ -52,10 +52,29 @@
     <string name="manage_overlays">Manage Overlays</string>
     <string name="add_image">Add Image</string>
     <string name="add_text">Add Text</string>
+    <string name="add_gif">Add GIF</string>
+    <string name="add_video">Add Video</string>
     <string name="overlay_icon">Overlay icon</string>
     <string name="toggle_visibility">Toggle visibility</string>
     <string name="delete_overlay">Delete overlay</string>
-    <string name="no_overlays">No overlays yet.\nTap Add Image or Add Text to get started.</string>
+    <string name="no_overlays">No overlays yet.\nTap a button above to add one.</string>
     <string name="close">Close</string>
     <string name="overlays">Overlays</string>
+
+    <!-- Phase 5B - Text overlay dialog -->
+    <string name="text_overlay_title">Text Overlay</string>
+    <string name="text_content_label">Text</string>
+    <string name="font_size_label">Font Size</string>
+    <string name="color_label">Color</string>
+    <string name="custom_hex_color_hint">Custom hex (#RRGGBB or #AARRGGBB)</string>
+    <string name="custom_hex_color_invalid">Invalid hex color</string>
+    <string name="default_text_overlay">Text</string>
+
+    <!-- Phase 7 - Stats HUD -->
+    <string name="hud_format">%1$d kbps · %2$d fps · %3$s</string>
+
+    <!-- Phase 7 - Backup URL + mic selector -->
+    <string name="backup_rtmp_url_label">Backup RTMP URL (optional)</string>
+    <string name="mic_source_label">Microphone</string>
+    <string name="mic_source_default">Default (system mic)</string>
 </resources>

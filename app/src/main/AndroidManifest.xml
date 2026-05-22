@@ -47,11 +47,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Phase 2A: Camera preview activity -->
+        <!-- Phase 2A: Camera preview activity. Landscape-locked for broadcast 16:9 output. -->
         <activity
             android:name=".StreamActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false"
-            android:screenOrientation="portrait"
+            android:screenOrientation="landscape"
             android:theme="@style/Theme.StreamForge" />
 
         <!-- Phase 3B: Overlay editor test activity (dev only) -->

@@ -1,6 +1,10 @@
 package com.streamforge.app
 
+import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.Toast
@@ -31,6 +35,9 @@ class MainActivity : AppCompatActivity() {
         Resolution("1920x1080 (1080p)", 1920, 1080)
     )
 
+    private data class MicOption(val label: String, val deviceId: Int)
+    private var micOptions: List<MicOption> = listOf(MicOption("Default (system mic)", 0))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -40,6 +47,7 @@ class MainActivity : AppCompatActivity() {
 
         setupResolutionDropdown()
         setupBitrateSliders()
+        setupMicDropdown()
         setupSaveButton()
         setupDevMenu()
     }
@@ -81,6 +89,43 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.audio_bitrate_label, binding.sliderAudioBitrate.value.toInt())
     }
 
+    private fun setupMicDropdown() {
+        micOptions = enumerateMicOptions()
+        val adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_dropdown_item_1line,
+            micOptions.map { it.label }
+        )
+        binding.actvMicSource.setAdapter(adapter)
+        binding.actvMicSource.setText(micOptions[0].label, false)
+    }
+
+    private fun enumerateMicOptions(): List<MicOption> {
+        val list = mutableListOf(MicOption(getString(R.string.mic_source_default), 0))
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return list
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val devices = try {
+            am.getDevices(AudioManager.GET_DEVICES_INPUTS)
+        } catch (_: Exception) {
+            return list
+        }
+        devices.forEach { d ->
+            val label = "${describeDeviceType(d.type)} · ${d.productName}"
+            list += MicOption(label, d.id)
+        }
+        return list
+    }
+
+    private fun describeDeviceType(type: Int): String = when (type) {
+        AudioDeviceInfo.TYPE_BUILTIN_MIC -> "Built-in"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Wired headset"
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Bluetooth"
+        AudioDeviceInfo.TYPE_USB_DEVICE -> "USB"
+        AudioDeviceInfo.TYPE_USB_HEADSET -> "USB headset"
+        AudioDeviceInfo.TYPE_USB_ACCESSORY -> "USB accessory"
+        else -> "Mic"
+    }
+
     private fun setupSaveButton() {
         binding.btnSaveAndGoLive.setOnClickListener {
             if (validateInputs()) {
@@ -106,6 +151,14 @@ class MainActivity : AppCompatActivity() {
                 // Populate form with saved values
                 binding.etRtmpUrl.setText(config.rtmpUrl)
                 binding.etStreamKey.setText(config.streamKey)
+                binding.etBackupRtmpUrl.setText(config.backupRtmpUrl)
+
+                // Mic source — fall back to "Default" if the saved device is gone.
+                val micIndex = micOptions.indexOfFirst { it.deviceId == config.preferredMicId }
+                binding.actvMicSource.setText(
+                    micOptions[if (micIndex >= 0) micIndex else 0].label,
+                    false
+                )
                 
                 // Set resolution
                 val resolutionIndex = resolutions.indexOfFirst { 
@@ -165,6 +218,10 @@ class MainActivity : AppCompatActivity() {
                 val resolution = resolutions.find { it.label == selectedResolutionLabel } 
                     ?: resolutions[1] // Default to 720p
 
+                // Selected mic option
+                val micLabel = binding.actvMicSource.text.toString()
+                val micId = micOptions.firstOrNull { it.label == micLabel }?.deviceId ?: 0
+
                 // Build config
                 val config = StreamConfig(
                     rtmpUrl = binding.etRtmpUrl.text.toString().trim(),
@@ -173,7 +230,9 @@ class MainActivity : AppCompatActivity() {
                     height = resolution.height,
                     fps = 30,
                     videoBitrateKbps = binding.sliderVideoBitrate.value.toInt(),
-                    audioBitrateKbps = binding.sliderAudioBitrate.value.toInt()
+                    audioBitrateKbps = binding.sliderAudioBitrate.value.toInt(),
+                    backupRtmpUrl = binding.etBackupRtmpUrl.text.toString().trim(),
+                    preferredMicId = micId
                 )
 
                 // Save config

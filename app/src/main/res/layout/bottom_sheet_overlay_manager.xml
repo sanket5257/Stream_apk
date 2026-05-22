@@ -3,16 +3,16 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="?attr/colorSurface"
     android:orientation="vertical"
-    android:padding="16dp"
-    android:background="?attr/colorSurface">
+    android:padding="16dp">
 
     <!-- Header -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingBottom="16dp">
 
         <TextView
@@ -20,9 +20,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/manage_overlays"
+            android:textColor="?android:textColorPrimary"
             android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="?android:textColorPrimary" />
+            android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnClose"
@@ -33,21 +33,21 @@
             app:icon="@android:drawable/ic_menu_close_clear_cancel" />
     </LinearLayout>
 
-    <!-- Add Buttons -->
+    <!-- Add buttons row 1: Image + Text -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:gravity="center"
-        android:paddingBottom="16dp">
+        android:orientation="horizontal"
+        android:paddingBottom="8dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddImage"
             style="@style/Widget.Material3.Button.Icon"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginEnd="8dp"
+            android:layout_weight="1"
             android:text="@string/add_image"
             app:icon="@android:drawable/ic_menu_gallery" />
 
@@ -56,13 +56,42 @@
             style="@style/Widget.Material3.Button.Icon"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginStart="8dp"
+            android:layout_weight="1"
             android:text="@string/add_text"
             app:icon="@android:drawable/ic_menu_edit" />
     </LinearLayout>
 
-    <!-- Overlay List -->
+    <!-- Add buttons row 2: GIF + Video -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingBottom="16dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddGif"
+            style="@style/Widget.Material3.Button.Icon"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:text="@string/add_gif"
+            app:icon="@android:drawable/ic_menu_slideshow" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddVideo"
+            style="@style/Widget.Material3.Button.Icon"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="@string/add_video"
+            app:icon="@android:drawable/ic_media_play" />
+    </LinearLayout>
+
+    <!-- Overlay list -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvOverlays"
         android:layout_width="match_parent"
@@ -70,14 +99,14 @@
         android:clipToPadding="false"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
-    <!-- Empty State -->
+    <!-- Empty state -->
     <TextView
         android:id="@+id/tvEmptyState"
         android:layout_width="match_parent"
         android:layout_height="300dp"
         android:gravity="center"
         android:text="@string/no_overlays"
-        android:textSize="16sp"
         android:textColor="?android:textColorSecondary"
+        android:textSize="16sp"
         android:visibility="gone" />
 </LinearLayout>

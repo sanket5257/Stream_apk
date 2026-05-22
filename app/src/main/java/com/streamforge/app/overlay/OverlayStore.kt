@@ -7,17 +7,18 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+
+// Top-level delegate: DataStore must be a process-wide singleton per file.
+private val Context.overlayDataStore: DataStore<Preferences> by preferencesDataStore(name = "overlay_prefs")
 
 /**
  * Phase 4B: Persistent storage for overlay items.
  * Uses DataStore with JSON serialization.
  */
 class OverlayStore(private val context: Context) {
-
-    private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "overlay_prefs")
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -33,7 +34,7 @@ class OverlayStore(private val context: Context) {
      * Returns empty list if no overlays exist.
      */
     suspend fun loadOverlays(): List<OverlayItem> {
-        val preferences = context.dataStore.data.first()
+        val preferences = context.overlayDataStore.data.first()
         val jsonString = preferences[KEY_OVERLAYS] ?: return emptyList()
         
         return try {
@@ -49,7 +50,7 @@ class OverlayStore(private val context: Context) {
      */
     suspend fun saveOverlays(overlays: List<OverlayItem>) {
         val jsonString = json.encodeToString(overlays)
-        context.dataStore.edit { preferences ->
+        context.overlayDataStore.edit { preferences ->
             preferences[KEY_OVERLAYS] = jsonString
         }
     }
@@ -88,7 +89,7 @@ class OverlayStore(private val context: Context) {
      * Clear all overlays.
      */
     suspend fun clearAll() {
-        context.dataStore.edit { preferences ->
+        context.overlayDataStore.edit { preferences ->
             preferences.remove(KEY_OVERLAYS)
         }
     }

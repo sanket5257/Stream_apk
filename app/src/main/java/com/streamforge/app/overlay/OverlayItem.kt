@@ -48,4 +48,36 @@ sealed class OverlayItem {
         override var zIndex: Int = 0,
         override var visible: Boolean = true
     ) : OverlayItem()
+
+    /**
+     * Animated GIF overlay (rendered via RootEncoder's GifObjectFilterRender).
+     */
+    @Serializable
+    data class Gif(
+        override val id: String,
+        val uri: String,
+        override var x: Float = 0.5f,
+        override var y: Float = 0.5f,
+        override var scale: Float = 1.0f,
+        override var rotation: Float = 0f,
+        override var zIndex: Int = 0,
+        override var visible: Boolean = true
+    ) : OverlayItem()
+
+    /**
+     * Video overlay. Frames are extracted with MediaMetadataRetriever at low fps
+     * and pushed into an ImageObjectFilterRender. Audio track is ignored.
+     */
+    @Serializable
+    data class Video(
+        override val id: String,
+        val uri: String,
+        val loop: Boolean = true,
+        override var x: Float = 0.5f,
+        override var y: Float = 0.5f,
+        override var scale: Float = 1.0f,
+        override var rotation: Float = 0f,
+        override var zIndex: Int = 0,
+        override var visible: Boolean = true
+    ) : OverlayItem()
 }

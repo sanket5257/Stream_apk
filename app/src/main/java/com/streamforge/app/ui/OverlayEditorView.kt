@@ -26,30 +26,57 @@ class OverlayEditorView @JvmOverloads constructor(
 
     private val items = mutableListOf<OverlayItem>()
     private var selectedId: String? = null
-    
+
     private var selectionListener: ((String?) -> Unit)? = null
     private var itemChangeListener: ((OverlayItem) -> Unit)? = null
-    
-    // Paint for drawing items
+
+    /**
+     * When true (default), each item is drawn as a translucent colored rectangle —
+     * used by [com.streamforge.app.OverlayTestActivity] which has no real GL pipeline.
+     * StreamActivity sets this to false so only a thin outline + selection border show,
+     * letting RootEncoder's filters provide the actual overlay visuals.
+     */
+    var showPlaceholders: Boolean = true
+        set(value) { field = value; invalidate() }
+
     private val imagePaint = Paint().apply {
         color = Color.RED
         alpha = 128
         style = Paint.Style.FILL
     }
-    
+
     private val textPaint = Paint().apply {
         color = Color.BLUE
         alpha = 128
         style = Paint.Style.FILL
     }
-    
+
+    private val gifPaint = Paint().apply {
+        color = Color.MAGENTA
+        alpha = 128
+        style = Paint.Style.FILL
+    }
+
+    private val videoPaint = Paint().apply {
+        color = Color.parseColor("#4CAF50")
+        alpha = 128
+        style = Paint.Style.FILL
+    }
+
+    private val outlinePaint = Paint().apply {
+        color = Color.WHITE
+        alpha = 160
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+
     private val selectionPaint = Paint().apply {
         color = Color.YELLOW
         style = Paint.Style.STROKE
         strokeWidth = 4f
         pathEffect = DashPathEffect(floatArrayOf(10f, 10f), 0f)
     }
-    
+
     private val textDrawPaint = Paint().apply {
         color = Color.WHITE
         textSize = 32f
@@ -83,36 +110,39 @@ class OverlayEditorView @JvmOverloads constructor(
             canvas.rotate(item.rotation)
             canvas.scale(item.scale, item.scale)
             
-            // Draw based on type
             when (item) {
                 is OverlayItem.Image -> {
-                    // Draw red rectangle for image placeholder
                     val rect = RectF(-50f, -50f, 50f, 50f)
-                    canvas.drawRect(rect, imagePaint)
-                    
-                    // Draw selection border if selected
-                    if (item.id == selectedId) {
-                        canvas.drawRect(rect, selectionPaint)
-                    }
+                    if (showPlaceholders) canvas.drawRect(rect, imagePaint)
+                    canvas.drawRect(rect, outlinePaint)
+                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
                 }
                 is OverlayItem.Text -> {
-                    // Draw blue rectangle for text placeholder
                     val rect = RectF(-75f, -25f, 75f, 25f)
-                    canvas.drawRect(rect, textPaint)
-                    
-                    // Draw text preview
-                    textDrawPaint.textSize = item.fontSizeSp
-                    textDrawPaint.color = item.colorArgb
-                    val textWidth = textDrawPaint.measureText(item.text)
-                    canvas.drawText(item.text, -textWidth / 2, 10f, textDrawPaint)
-                    
-                    // Draw selection border if selected
-                    if (item.id == selectedId) {
-                        canvas.drawRect(rect, selectionPaint)
+                    if (showPlaceholders) {
+                        canvas.drawRect(rect, textPaint)
+                        textDrawPaint.textSize = item.fontSizeSp
+                        textDrawPaint.color = item.colorArgb
+                        val textWidth = textDrawPaint.measureText(item.text)
+                        canvas.drawText(item.text, -textWidth / 2, 10f, textDrawPaint)
                     }
+                    canvas.drawRect(rect, outlinePaint)
+                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
+                }
+                is OverlayItem.Gif -> {
+                    val rect = RectF(-50f, -50f, 50f, 50f)
+                    if (showPlaceholders) canvas.drawRect(rect, gifPaint)
+                    canvas.drawRect(rect, outlinePaint)
+                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
+                }
+                is OverlayItem.Video -> {
+                    val rect = RectF(-60f, -45f, 60f, 45f)
+                    if (showPlaceholders) canvas.drawRect(rect, videoPaint)
+                    canvas.drawRect(rect, outlinePaint)
+                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
                 }
             }
-            
+
             canvas.restore()
         }
     }

@@ -17,6 +17,10 @@ data class StreamConfig(
     val fps: Int,
     val videoBitrateKbps: Int,
     val audioBitrateKbps: Int,
+    /** Phase 7: optional fallback RTMP URL. Used when primary exhausts reconnect attempts. */
+    val backupRtmpUrl: String = "",
+    /** Phase 7: preferred mic input id from AudioDeviceInfo.getId(); 0 = system default. */
+    val preferredMicId: Int = 0,
 ) : Parcelable {
     companion object {
         val DEFAULT = StreamConfig(
