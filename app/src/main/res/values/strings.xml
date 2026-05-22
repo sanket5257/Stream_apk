@@ -10,6 +10,36 @@
     <string name="open_stream">Open Stream</string>
     <string name="switch_camera">Switch</string>
     <string name="permission_required">Camera and microphone permissions are required</string>
+    <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
+    <string name="mic_level">Mic Level</string>
+
+    <!-- Phase 2B - Stream Config UI -->
+    <string name="rtmp_url_label">RTMP Server URL</string>
+    <string name="rtmp_url_hint">rtmp://a.rtmp.youtube.com/live2/</string>
+    <string name="stream_key_label">Stream Key</string>
+    <string name="stream_key_hint">Your YouTube stream key</string>
+    <string name="resolution_label">Resolution</string>
+    <string name="video_bitrate_label">Video Bitrate: %d kbps</string>
+    <string name="audio_bitrate_label">Audio Bitrate: %d kbps</string>
+    <string name="save_and_go_live">Save &amp; Go Live</string>
+    <string name="error_empty_url">RTMP URL cannot be empty</string>
+    <string name="error_invalid_url">URL must start with rtmp:// or rtmps://</string>
+    <string name="error_empty_key">Stream key cannot be empty</string>
+    <string name="config_saved">Configuration saved</string>
+
+    <!-- Resolution options -->
+    <string name="resolution_480p">854x480 (480p)</string>
+    <string name="resolution_720p">1280x720 (720p)</string>
+    <string name="resolution_1080p">1920x1080 (1080p)</string>
+
+    <!-- Phase 3A - RTMP Streaming -->
+    <string name="go_live">Go Live</string>
+    <string name="stop">Stop</string>
+    <string name="status_idle">Ready to stream</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_live">● LIVE</string>
+    <string name="status_failed">Failed: %s</string>
 
     <!-- Foreground service -->
     <string name="notif_channel_name">Live streaming</string>
@@ -17,4 +47,15 @@
     <string name="notif_live_title">Live on YouTube</string>
     <string name="notif_live_text">Tap to return to the stream</string>
     <string name="notif_stop_action">Stop</string>
+
+    <!-- Phase 4B - Overlay Management -->
+    <string name="manage_overlays">Manage Overlays</string>
+    <string name="add_image">Add Image</string>
+    <string name="add_text">Add Text</string>
+    <string name="overlay_icon">Overlay icon</string>
+    <string name="toggle_visibility">Toggle visibility</string>
+    <string name="delete_overlay">Delete overlay</string>
+    <string name="no_overlays">No overlays yet.\nTap Add Image or Add Text to get started.</string>
+    <string name="close">Close</string>
+    <string name="overlays">Overlays</string>
 </resources>
