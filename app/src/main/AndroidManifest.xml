@@ -47,7 +47,13 @@
             </intent-filter>
         </activity>
 
-        <!-- StreamActivity will be added in Phase 2A -->
+        <!-- Phase 2A: Camera preview activity -->
+        <activity
+            android:name=".StreamActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.StreamForge" />
+
         <!-- StreamService will be added in Phase 4A -->
 
     </application>

@@ -24,7 +24,7 @@ securityCrypto = "1.1.0-alpha06"
 # Streaming
 # RootEncoder (formerly rtmp-rtsp-stream-client-java) — verify latest at
 # https://github.com/pedroSG94/RootEncoder/releases before bumping.
-rootencoder = "2.5.6"
+rootencoder = "2.4.5"
 
 # Coroutines
 coroutines = "1.8.1"
