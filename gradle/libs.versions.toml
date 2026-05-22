@@ -29,6 +29,9 @@ rootencoder = "2.4.5"
 # Coroutines
 coroutines = "1.8.1"
 
+# Serialization
+kotlinxSerialization = "1.6.3"
+
 # Testing
 junit = "4.13.2"
 androidxJunit = "1.2.1"
@@ -57,6 +60,9 @@ rootencoder-library = { module = "com.github.pedroSG94.RootEncoder:library", ver
 # Coroutines
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 
+# Serialization
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
 # Testing
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-junit = { module = "androidx.test.ext:junit", version.ref = "androidxJunit" }
@@ -65,3 +71,4 @@ androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", vers
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

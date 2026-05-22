@@ -54,7 +54,19 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.StreamForge" />
 
-        <!-- StreamService will be added in Phase 4A -->
+        <!-- Phase 3B: Overlay editor test activity (dev only) -->
+        <activity
+            android:name=".OverlayTestActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.StreamForge" />
+
+        <!-- Phase 4A: Foreground service for background streaming -->
+        <service
+            android:name=".service.StreamService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone" />
 
     </application>
 
