@@ -173,8 +173,10 @@ class MainActivity : AppCompatActivity() {
                 binding.sliderAudioBitrate.value = config.audioBitrateKbps.toFloat()
                 
                 isInitialLoad = false
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, "Error loading config: ${e.message}", Toast.LENGTH_SHORT).show()
+            } catch (e: Throwable) {
+                android.util.Log.e("MainActivity", "Error loading config", e)
+                val detail = e.message ?: e.javaClass.simpleName
+                Toast.makeText(this@MainActivity, "Error loading config: $detail", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -243,10 +245,12 @@ class MainActivity : AppCompatActivity() {
                 // Launch stream activity
                 startActivity(Intent(this@MainActivity, StreamActivity::class.java))
                 
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                android.util.Log.e("MainActivity", "Error saving config", e)
+                val detail = e.message ?: e.javaClass.simpleName
                 Toast.makeText(
-                    this@MainActivity, 
-                    "Error saving config: ${e.message}", 
+                    this@MainActivity,
+                    "Error saving config: $detail",
                     Toast.LENGTH_LONG
                 ).show()
             }
