@@ -80,6 +80,18 @@ class StreamActivity : AppCompatActivity() {
         }
     }
 
+    // Debounce overlay gesture writes — drag/pinch fires per-frame and writing JSON
+    // to DataStore each time was the source of preview jank.
+    private val overlayPersistHandler = Handler(Looper.getMainLooper())
+    private var pendingOverlayPersist: OverlayItem? = null
+    private val overlayPersistRunnable = Runnable {
+        val toSave = pendingOverlayPersist ?: return@Runnable
+        pendingOverlayPersist = null
+        lifecycleScope.launch {
+            try { overlayStore.updateOverlay(toSave) } catch (_: Exception) { }
+        }
+    }
+
     // Phase 7: stats HUD
     private val statsHandler = Handler(Looper.getMainLooper())
     @Volatile private var currentFps: Int = 0
@@ -184,6 +196,12 @@ class StreamActivity : AppCompatActivity() {
         // Switch camera button
         binding.btnSwitchCamera.setOnClickListener {
             rtmpCamera.switchCamera()
+        }
+
+        // Rotate screen button: cycle auto → landscape-left → landscape-right → auto.
+        // Lets the user override sensor auto-rotate when they want a specific side up.
+        binding.btnRotateScreen.setOnClickListener {
+            cycleScreenOrientation()
         }
 
         // Mute/Unmute toggle button
@@ -354,6 +372,17 @@ class StreamActivity : AppCompatActivity() {
         binding.tvStatsHud.text = getString(R.string.hud_format, kbps, currentFps, formatUptime(uptimeMs))
     }
 
+    private fun cycleScreenOrientation() {
+        val next = when (requestedOrientation) {
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ->
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ->
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        requestedOrientation = next
+    }
+
     private fun formatUptime(ms: Long): String {
         val totalSeconds = ms / 1000
         val h = totalSeconds / 3600
@@ -378,12 +407,13 @@ class StreamActivity : AppCompatActivity() {
         binding.overlayEditor.showPlaceholders = false
         binding.overlayEditor.setItemChangeListener { item ->
             // Live-update path: a drag / pinch / rotate gesture finished a frame.
+            // GL transform update is cheap — apply immediately.
             overlayRenderer?.updateOverlay(item)
-            lifecycleScope.launch {
-                try {
-                    overlayStore.updateOverlay(item)
-                } catch (_: Exception) { }
-            }
+            // Persist only after the gesture settles. JSON-encoding + DataStore I/O
+            // on every frame previously caused visible preview lag.
+            pendingOverlayPersist = item
+            overlayPersistHandler.removeCallbacks(overlayPersistRunnable)
+            overlayPersistHandler.postDelayed(overlayPersistRunnable, 250)
         }
     }
 
@@ -405,6 +435,16 @@ class StreamActivity : AppCompatActivity() {
             rtmpCamera.stopPreview()
         }
         stopAudioLevelMonitoring()
+        flushPendingOverlayPersist()
+    }
+
+    private fun flushPendingOverlayPersist() {
+        overlayPersistHandler.removeCallbacks(overlayPersistRunnable)
+        val toSave = pendingOverlayPersist ?: return
+        pendingOverlayPersist = null
+        lifecycleScope.launch {
+            try { overlayStore.updateOverlay(toSave) } catch (_: Exception) { }
+        }
     }
 
     override fun onResume() {
@@ -413,10 +453,27 @@ class StreamActivity : AppCompatActivity() {
         // The surface might not be ready yet
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Re-init the preview so the camera sensor orientation matches the new
+        // display rotation (e.g. flipping between landscape-left and right).
+        // Skip while live — the running encoder pipeline can't be rotated mid-stream.
+        if (!::rtmpCamera.isInitialized) return
+        if (streamManager.state.value is StreamState.Live ||
+            streamManager.state.value is StreamState.Connecting) return
+        if (rtmpCamera.isOnPreview) {
+            val facing = if (rtmpCamera.cameraFacing == CameraHelper.Facing.FRONT)
+                CameraHelper.Facing.FRONT else CameraHelper.Facing.BACK
+            rtmpCamera.stopPreview()
+            rtmpCamera.startPreview(facing)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         stopAudioLevelMonitoring()
         stopStatsHud()
+        flushPendingOverlayPersist()
 
         overlayRenderer?.release()
         overlayRenderer = null

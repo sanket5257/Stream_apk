@@ -47,12 +47,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Phase 2A: Camera preview activity. Landscape-locked for broadcast 16:9 output. -->
+        <!-- Phase 2A: Camera preview activity. sensorLandscape lets the device auto-flip
+             between landscape-left and landscape-right; the explicit rotate button in
+             the activity overrides this if the user wants to lock a specific side. -->
         <activity
             android:name=".StreamActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:exported="false"
-            android:screenOrientation="landscape"
+            android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.StreamForge" />
 
         <!-- Phase 3B: Overlay editor test activity (dev only) -->

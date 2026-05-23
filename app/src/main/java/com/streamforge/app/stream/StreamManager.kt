@@ -41,7 +41,8 @@ class StreamManager(
             config.height,
             config.fps,
             config.videoBitrateKbps * 1024,
-            2, // iFrameInterval
+            1, // iFrameInterval in seconds — shorter GOP cuts glass-to-glass latency
+               // (~1s reduction vs 2s) at the cost of ~5–10% bitrate efficiency.
             0  // rotation
         )
 

@@ -10,6 +10,13 @@ import com.pedro.encoder.input.gl.render.filters.`object`.GifObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.ImageObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.TextObjectFilterRender
 import com.pedro.library.rtmp.RtmpCamera2
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 
 /**
@@ -32,6 +39,9 @@ class OverlayRenderer(
     private val filters = mutableMapOf<String, BaseFilterRender>()
     private val bitmaps = mutableMapOf<String, Bitmap>()
     private val videoPlayers = mutableMapOf<String, VideoOverlayPlayer>()
+    private val pendingLoads = mutableMapOf<String, Job>()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     /**
      * Reconcile the filter pipeline with the given list of overlays.
@@ -44,6 +54,9 @@ class OverlayRenderer(
         filters.keys.toList()
             .filter { it !in visibleIds }
             .forEach { removeOverlay(it) }
+        pendingLoads.keys.toList()
+            .filter { it !in visibleIds }
+            .forEach { pendingLoads.remove(it)?.cancel() }
 
         visible.sortedBy { it.zIndex }.forEach { item ->
             if (filters.containsKey(item.id)) updateOverlay(item) else addOverlay(item)
@@ -61,7 +74,7 @@ class OverlayRenderer(
         }
         val filter = filters[item.id]
         if (filter == null) {
-            addOverlay(item)
+            if (!pendingLoads.containsKey(item.id)) addOverlay(item)
             return
         }
         if (item is OverlayItem.Text && filter is TextObjectFilterRender) {
@@ -71,17 +84,60 @@ class OverlayRenderer(
     }
 
     private fun addOverlay(item: OverlayItem) {
-        val filter: BaseFilterRender = when (item) {
-            is OverlayItem.Image -> buildImageFilter(item) ?: return
-            is OverlayItem.Text -> buildTextFilter(item)
-            is OverlayItem.Gif -> buildGifFilter(item) ?: return
-            is OverlayItem.Video -> buildVideoFilter(item)
+        when (item) {
+            is OverlayItem.Text -> attachFilter(item, buildTextFilter(item))
+            is OverlayItem.Video -> attachFilter(item, buildVideoFilter(item))
+            is OverlayItem.Image -> loadAndAttachImage(item)
+            is OverlayItem.Gif -> loadAndAttachGif(item)
         }
+    }
+
+    private fun loadAndAttachImage(item: OverlayItem.Image) {
+        if (pendingLoads.containsKey(item.id) || filters.containsKey(item.id)) return
+        pendingLoads[item.id] = scope.launch {
+            val bitmap = withContext(Dispatchers.IO) { decodeBitmap(item.uri) }
+            pendingLoads.remove(item.id)
+            if (bitmap == null || !item.visible) {
+                bitmap?.recycle()
+                return@launch
+            }
+            if (filters.containsKey(item.id)) {
+                bitmap.recycle()
+                return@launch
+            }
+            bitmaps[item.id] = bitmap
+            val filter = ImageObjectFilterRender().apply { setImage(bitmap) }
+            attachFilter(item, filter)
+        }
+    }
+
+    private fun loadAndAttachGif(item: OverlayItem.Gif) {
+        if (pendingLoads.containsKey(item.id) || filters.containsKey(item.id)) return
+        pendingLoads[item.id] = scope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openInputStream(Uri.parse(item.uri))?.use { it.readBytes() }
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            pendingLoads.remove(item.id)
+            if (bytes == null || !item.visible || filters.containsKey(item.id)) return@launch
+            val filter = try {
+                GifObjectFilterRender().apply { setGif(ByteArrayInputStream(bytes)) }
+            } catch (_: Exception) {
+                return@launch
+            }
+            attachFilter(item, filter)
+        }
+    }
+
+    private fun attachFilter(item: OverlayItem, filter: BaseFilterRender) {
         applyTransform(filter, item)
         try {
             rtmpCamera.glInterface.addFilter(filter)
             filters[item.id] = filter
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // glInterface may not be ready yet — caller will retry via applyOverlays.
             bitmaps.remove(item.id)?.recycle()
             videoPlayers.remove(item.id)?.release()
@@ -89,6 +145,7 @@ class OverlayRenderer(
     }
 
     fun removeOverlay(id: String) {
+        pendingLoads.remove(id)?.cancel()
         val filter = filters.remove(id) ?: return
         try {
             rtmpCamera.glInterface.removeFilter(filter)
@@ -101,7 +158,10 @@ class OverlayRenderer(
      * Tear down all overlays and release MediaPlayers. Call from Activity.onDestroy.
      */
     fun release() {
+        pendingLoads.values.forEach { it.cancel() }
+        pendingLoads.clear()
         filters.keys.toList().forEach { removeOverlay(it) }
+        scope.cancel()
     }
 
     private fun applyTransform(filter: BaseFilterRender, item: OverlayItem) {
@@ -115,31 +175,10 @@ class OverlayRenderer(
         filter.setRotation(item.rotation.toInt())
     }
 
-    private fun buildImageFilter(item: OverlayItem.Image): ImageObjectFilterRender? {
-        val bitmap = decodeBitmap(item.uri) ?: return null
-        bitmaps[item.id] = bitmap
-        val filter = ImageObjectFilterRender()
-        filter.setImage(bitmap)
-        return filter
-    }
-
     private fun buildTextFilter(item: OverlayItem.Text): TextObjectFilterRender {
         val filter = TextObjectFilterRender()
         filter.setText(item.text, item.fontSizeSp, item.colorArgb)
         return filter
-    }
-
-    private fun buildGifFilter(item: OverlayItem.Gif): GifObjectFilterRender? {
-        return try {
-            val bytes = context.contentResolver.openInputStream(Uri.parse(item.uri))?.use {
-                it.readBytes()
-            } ?: return null
-            val filter = GifObjectFilterRender()
-            filter.setGif(ByteArrayInputStream(bytes))
-            filter
-        } catch (e: Exception) {
-            null
-        }
     }
 
     private fun buildVideoFilter(item: OverlayItem.Video): BaseObjectFilterRender {
@@ -148,11 +187,35 @@ class OverlayRenderer(
         return player.filter
     }
 
+    /**
+     * Decode with inSampleSize so a 12MP camera photo (~48MB) doesn't allocate
+     * a giant bitmap. Overlays render at <=20% of stream width — anything larger
+     * than ~1024px on the long edge is wasted memory and GPU upload time.
+     */
     private fun decodeBitmap(uriString: String): Bitmap? = try {
-        context.contentResolver.openInputStream(Uri.parse(uriString)).use { stream ->
-            BitmapFactory.decodeStream(stream)
+        val uri = Uri.parse(uriString)
+        val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, boundsOpts) }
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = calcSampleSize(boundsOpts.outWidth, boundsOpts.outHeight, MAX_OVERLAY_EDGE_PX)
+            inPreferredConfig = Bitmap.Config.ARGB_8888
         }
-    } catch (e: Exception) {
+        context.contentResolver.openInputStream(uri).use { stream ->
+            BitmapFactory.decodeStream(stream, null, opts)
+        }
+    } catch (_: Exception) {
         null
+    }
+
+    private fun calcSampleSize(srcW: Int, srcH: Int, maxEdge: Int): Int {
+        if (srcW <= 0 || srcH <= 0) return 1
+        val longEdge = maxOf(srcW, srcH)
+        var sample = 1
+        while (longEdge / sample > maxEdge) sample *= 2
+        return sample
+    }
+
+    private companion object {
+        const val MAX_OVERLAY_EDGE_PX = 1024
     }
 }
