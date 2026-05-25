@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import com.pedro.encoder.input.gl.render.filters.BaseFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.BaseObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.GifObjectFilterRender
@@ -43,11 +45,39 @@ class OverlayRenderer(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    // Self-heal backstop. The GL pipeline processes one filter action per rendered
+    // frame and only when its render target is ready; a freshly-added overlay can race
+    // that state and silently never attach (the old "toggle the eye icon to make it
+    // show" symptom). We re-run reconciliation a few times after every change so any
+    // missed/transient attach is re-applied automatically — no user action needed.
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var lastItems: List<OverlayItem> = emptyList()
+    private var verifyAttempts = 0
+    private val verifyRunnable = object : Runnable {
+        override fun run() {
+            reconcile(lastItems)
+            verifyAttempts++
+            if (verifyAttempts < MAX_VERIFY_ATTEMPTS) {
+                mainHandler.postDelayed(this, VERIFY_INTERVAL_MS)
+            }
+        }
+    }
+
     /**
-     * Reconcile the filter pipeline with the given list of overlays.
-     * Adds new items, updates existing ones, removes any that vanished or became hidden.
+     * Reconcile the filter pipeline with the given list of overlays, then schedule a
+     * short self-heal sweep so transient GL-readiness races can't leave an overlay
+     * invisible. Adds new items, updates existing ones, removes any that vanished
+     * or became hidden.
      */
     fun applyOverlays(items: List<OverlayItem>) {
+        lastItems = items
+        verifyAttempts = 0
+        mainHandler.removeCallbacks(verifyRunnable)
+        reconcile(items)
+        mainHandler.postDelayed(verifyRunnable, VERIFY_INTERVAL_MS)
+    }
+
+    private fun reconcile(items: List<OverlayItem>) {
         android.util.Log.d("OverlayRenderer", "applyOverlays called with ${items.size} items")
         val visible = items.filter { it.visible }
         android.util.Log.d("OverlayRenderer", "Visible items: ${visible.size}, Current filters: ${filters.size}")
@@ -221,6 +251,7 @@ class OverlayRenderer(
      * Tear down all overlays and release MediaPlayers. Call from Activity.onDestroy.
      */
     fun release() {
+        mainHandler.removeCallbacks(verifyRunnable)
         pendingLoads.values.forEach { it.cancel() }
         pendingLoads.clear()
         filters.keys.toList().forEach { id ->
@@ -290,5 +321,11 @@ class OverlayRenderer(
 
     private companion object {
         const val MAX_OVERLAY_EDGE_PX = 1024
+
+        // Self-heal sweep: re-reconcile at t = 300ms and 600ms after each change.
+        // Bounded (no infinite loop); reconcile is idempotent for already-attached
+        // items and only (re)adds genuinely-missing or failed ones.
+        const val VERIFY_INTERVAL_MS = 300L
+        const val MAX_VERIFY_ATTEMPTS = 2
     }
 }
