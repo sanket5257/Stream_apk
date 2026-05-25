@@ -54,6 +54,11 @@ class StreamActivity : AppCompatActivity() {
     
     private var streamService: StreamService? = null
     private var isServiceBound = false
+
+    // Set when the preview surface is destroyed while streaming (e.g. the system media
+    // picker covers the screen). Triggers an automatic stream restart once the surface
+    // — and with it the GL pipeline / encoder feed — is recreated.
+    private var pendingStreamRecovery = false
     
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -177,6 +182,10 @@ class StreamActivity : AppCompatActivity() {
                     }
                 }
                 android.util.Log.d("StreamActivity", "Re-applying ${overlays.size} overlays after encoder prep")
+                // prepareVideo() tore down the GL pipeline (stopPreview → MainRender.release
+                // clears all filters). Drop stale filter handles so overlays re-attach fresh
+                // with their textures re-uploaded — otherwise they render as empty rectangles.
+                overlayRenderer?.onPipelineReset()
                 overlayRenderer?.applyOverlays(overlays)
             } catch (e: Exception) {
                 android.util.Log.e("StreamActivity", "Failed to re-apply overlays", e)
@@ -192,6 +201,12 @@ class StreamActivity : AppCompatActivity() {
                 loadAndApplyOverlays()
                 // Start audio level monitoring
                 startAudioLevelMonitoring()
+                // If the surface was destroyed mid-stream (e.g. the media picker covered
+                // us), the encoder feed died with it — transparently restart the stream.
+                if (pendingStreamRecovery) {
+                    pendingStreamRecovery = false
+                    recoverStreamAfterSurfaceLoss()
+                }
             }
 
             override fun surfaceChanged(
@@ -204,7 +219,14 @@ class StreamActivity : AppCompatActivity() {
             }
 
             override fun surfaceDestroyed(holder: SurfaceHolder) {
-                // Stop preview when surface is destroyed
+                // Losing the surface tears down the GL pipeline (OpenGlView.stop()), which
+                // kills the live encoder feed. If we were streaming, stop the now-dead
+                // stream cleanly and flag it to auto-restart when the surface returns.
+                val state = streamManager.state.value
+                if (state is StreamState.Live || state is StreamState.Connecting) {
+                    pendingStreamRecovery = true
+                    streamManager.stopStream()
+                }
                 if (rtmpCamera.isOnPreview) {
                     rtmpCamera.stopPreview()
                 }
@@ -435,6 +457,30 @@ class StreamActivity : AppCompatActivity() {
             overlayPersistHandler.removeCallbacks(overlayPersistRunnable)
             overlayPersistHandler.postDelayed(overlayPersistRunnable, 250)
         }
+    }
+
+    /**
+     * Restart the stream after the preview surface was destroyed mid-stream (typically
+     * the user opening the media picker, which covers us and triggers surfaceDestroyed →
+     * GL teardown). The preview was just re-created in surfaceCreated; give the camera a
+     * brief moment to settle, then start the stream again through the service so the
+     * foreground notification and reconnect logic stay intact. The viewer sees a short
+     * disconnect/reconnect rather than a permanently dead stream.
+     */
+    private fun recoverStreamAfterSurfaceLoss() {
+        val config = streamConfig ?: return
+        Toast.makeText(this, R.string.stream_recovering, Toast.LENGTH_SHORT).show()
+        overlayPersistHandler.postDelayed({
+            // Bail if the user already stopped, or we somehow started again in the meantime.
+            if (streamManager.state.value is StreamState.Live ||
+                streamManager.state.value is StreamState.Connecting) return@postDelayed
+            if (!rtmpCamera.isOnPreview) return@postDelayed
+            val intent = Intent(this, StreamService::class.java).apply {
+                action = StreamService.ACTION_START
+                putExtra(StreamService.EXTRA_CONFIG, config)
+            }
+            ContextCompat.startForegroundService(this, intent)
+        }, 600)
     }
 
     private fun loadAndApplyOverlays() {

@@ -41,6 +41,7 @@
     <string name="status_connecting">Connecting…</string>
     <string name="status_live">● LIVE</string>
     <string name="status_failed">Failed: %s</string>
+    <string name="stream_recovering">Reconnecting stream…</string>
 
     <!-- Foreground service -->
     <string name="notif_channel_name">Live streaming</string>

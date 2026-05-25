@@ -256,6 +256,29 @@ class OverlayRenderer(
     }
 
     /**
+     * The GL pipeline was torn down and rebuilt out from under us — going live calls
+     * prepareVideo(), which calls stopPreview(), which releases every filter and clears
+     * MainRender's filter list. Our cached filter handles are now stale: a plain
+     * applyOverlays() would see them as still-attached and only nudge transforms, leaving
+     * empty rectangles with no texture. Drop the stale handles (and detach any that did
+     * survive, to avoid duplicates) so the *next* applyOverlays() re-adds every overlay
+     * from scratch and re-uploads its texture. Bitmap / GIF caches are kept for speed.
+     */
+    fun onPipelineReset() {
+        mainHandler.removeCallbacksAndMessages(null)
+        pendingLoads.values.forEach { it.cancel() }
+        pendingLoads.clear()
+        filters.keys.toList().forEach { id ->
+            filters.remove(id)?.let { f ->
+                try { rtmpCamera.glInterface.removeFilter(f) } catch (_: Exception) { }
+            }
+        }
+        videoPlayers.values.forEach { it.release() }
+        videoPlayers.clear()
+        texturesHealed.clear()
+    }
+
+    /**
      * Re-upload an overlay's texture at most once per attach (deduped via texturesHealed).
      * Both the post-attach backstop and the verify sweep funnel through here, so a given
      * filter instance is healed exactly once no matter which fires first.
