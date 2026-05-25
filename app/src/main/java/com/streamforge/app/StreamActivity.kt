@@ -163,6 +163,26 @@ class StreamActivity : AppCompatActivity() {
         streamManager.audioManager =
             getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
 
+        // Set callback to re-apply overlays after encoder preparation.
+        // prepareVideo() resets the GL pipeline, so overlays must be re-added.
+        // This runs synchronously to ensure overlays are applied before stream starts.
+        streamManager.onEncoderPrepared = {
+            try {
+                val overlays = kotlinx.coroutines.runBlocking {
+                    try {
+                        overlayStore.loadOverlays()
+                    } catch (e: Exception) {
+                        android.util.Log.e("StreamActivity", "Failed to load overlays", e)
+                        emptyList()
+                    }
+                }
+                android.util.Log.d("StreamActivity", "Re-applying ${overlays.size} overlays after encoder prep")
+                overlayRenderer?.applyOverlays(overlays)
+            } catch (e: Exception) {
+                android.util.Log.e("StreamActivity", "Failed to re-apply overlays", e)
+            }
+        }
+
         // Set up surface callbacks
         binding.openGlView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {

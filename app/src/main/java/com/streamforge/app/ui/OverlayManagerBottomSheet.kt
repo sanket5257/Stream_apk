@@ -67,6 +67,19 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        
+        // Configure bottom sheet behavior
+        dialog?.setOnShowListener { dialogInterface ->
+            val bottomSheet = (dialogInterface as? com.google.android.material.bottomsheet.BottomSheetDialog)
+                ?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            bottomSheet?.let {
+                val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(it)
+                behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+                behavior.peekHeight = 800
+                behavior.isDraggable = true
+            }
+        }
+        
         overlayStore = OverlayStore(requireContext())
         setupRecyclerView()
         setupButtons()
@@ -99,6 +112,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         )
         binding.rvOverlays.layoutManager = LinearLayoutManager(requireContext())
         binding.rvOverlays.adapter = adapter
+        binding.rvOverlays.isNestedScrollingEnabled = true
     }
 
     private fun setupButtons() {

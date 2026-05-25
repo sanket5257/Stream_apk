@@ -29,6 +29,12 @@ class StreamManager(
     }
 
     /**
+     * Callback to re-apply overlays after encoder preparation.
+     * Set by StreamActivity so overlays survive the GL pipeline reset.
+     */
+    var onEncoderPrepared: (() -> Unit)? = null
+
+    /**
      * Start streaming with the given configuration. By default uses the primary URL;
      * pass [useBackup] = true to dial the backup URL (Phase 7 failover).
      */
@@ -76,6 +82,17 @@ class StreamManager(
                       else "$base/${config.streamKey}"
 
         camera.startStream(rtmpUrl)
+        
+        // Re-apply overlays AFTER stream starts, when GL context is fully ready.
+        // prepareVideo() resets the GL pipeline, and glInterface needs the stream
+        // running to accept new filters.
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try {
+                onEncoderPrepared?.invoke()
+            } catch (e: Exception) {
+                android.util.Log.e("StreamManager", "Failed to re-apply overlays", e)
+            }
+        }, 200) // Small delay to ensure GL context is ready
     }
 
     /**

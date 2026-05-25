@@ -48,19 +48,31 @@ class OverlayRenderer(
      * Adds new items, updates existing ones, removes any that vanished or became hidden.
      */
     fun applyOverlays(items: List<OverlayItem>) {
+        android.util.Log.d("OverlayRenderer", "applyOverlays called with ${items.size} items")
         val visible = items.filter { it.visible }
+        android.util.Log.d("OverlayRenderer", "Visible items: ${visible.size}, Current filters: ${filters.size}")
         val visibleIds = visible.map { it.id }.toSet()
 
         filters.keys.toList()
             .filter { it !in visibleIds }
-            .forEach { removeOverlay(it) }
+            .forEach { 
+                android.util.Log.d("OverlayRenderer", "Removing overlay $it (not in visible list)")
+                removeOverlay(it) 
+            }
         pendingLoads.keys.toList()
             .filter { it !in visibleIds }
             .forEach { pendingLoads.remove(it)?.cancel() }
 
         visible.sortedBy { it.zIndex }.forEach { item ->
-            if (filters.containsKey(item.id)) updateOverlay(item) else addOverlay(item)
+            if (filters.containsKey(item.id)) {
+                android.util.Log.d("OverlayRenderer", "Updating existing overlay ${item.id}")
+                updateOverlay(item)
+            } else {
+                android.util.Log.d("OverlayRenderer", "Adding new overlay ${item.id} (type: ${item::class.simpleName})")
+                addOverlay(item)
+            }
         }
+        android.util.Log.d("OverlayRenderer", "applyOverlays complete. Filters: ${filters.size}, Bitmaps cached: ${bitmaps.size}, GIFs cached: ${gifBytes.size}")
     }
 
     /**
@@ -93,26 +105,62 @@ class OverlayRenderer(
     }
 
     private fun loadAndAttachImage(item: OverlayItem.Image) {
-        if (pendingLoads.containsKey(item.id) || filters.containsKey(item.id)) return
+        if (pendingLoads.containsKey(item.id) || filters.containsKey(item.id)) {
+            android.util.Log.d("OverlayRenderer", "Skipping image ${item.id} - already pending or attached")
+            return
+        }
+        
+        // If bitmap is already cached, reuse it immediately
+        val cachedBitmap = bitmaps[item.id]
+        if (cachedBitmap != null && !cachedBitmap.isRecycled) {
+            android.util.Log.d("OverlayRenderer", "Reusing cached bitmap for ${item.id}")
+            val filter = ImageObjectFilterRender().apply { setImage(cachedBitmap) }
+            attachFilter(item, filter)
+            return
+        }
+        
+        android.util.Log.d("OverlayRenderer", "Loading image ${item.id} from ${item.uri}")
         pendingLoads[item.id] = scope.launch {
             val bitmap = withContext(Dispatchers.IO) { decodeBitmap(item.uri) }
             pendingLoads.remove(item.id)
-            if (bitmap == null || !item.visible) {
-                bitmap?.recycle()
+            if (bitmap == null) {
+                android.util.Log.e("OverlayRenderer", "Failed to decode bitmap for ${item.id}")
+                return@launch
+            }
+            if (!item.visible) {
+                android.util.Log.d("OverlayRenderer", "Item ${item.id} no longer visible, recycling bitmap")
+                bitmap.recycle()
                 return@launch
             }
             if (filters.containsKey(item.id)) {
+                android.util.Log.d("OverlayRenderer", "Filter already exists for ${item.id}, recycling new bitmap")
                 bitmap.recycle()
                 return@launch
             }
             bitmaps[item.id] = bitmap
+            android.util.Log.d("OverlayRenderer", "Bitmap loaded for ${item.id}, creating filter")
             val filter = ImageObjectFilterRender().apply { setImage(bitmap) }
             attachFilter(item, filter)
         }
     }
 
+    private val gifBytes = mutableMapOf<String, ByteArray>()
+
     private fun loadAndAttachGif(item: OverlayItem.Gif) {
         if (pendingLoads.containsKey(item.id) || filters.containsKey(item.id)) return
+        
+        // If GIF bytes are already cached, reuse them immediately
+        val cachedBytes = gifBytes[item.id]
+        if (cachedBytes != null) {
+            val filter = try {
+                GifObjectFilterRender().apply { setGif(ByteArrayInputStream(cachedBytes)) }
+            } catch (_: Exception) {
+                return
+            }
+            attachFilter(item, filter)
+            return
+        }
+        
         pendingLoads[item.id] = scope.launch {
             val bytes = withContext(Dispatchers.IO) {
                 try {
@@ -123,6 +171,7 @@ class OverlayRenderer(
             }
             pendingLoads.remove(item.id)
             if (bytes == null || !item.visible || filters.containsKey(item.id)) return@launch
+            gifBytes[item.id] = bytes
             val filter = try {
                 GifObjectFilterRender().apply { setGif(ByteArrayInputStream(bytes)) }
             } catch (_: Exception) {
@@ -137,8 +186,10 @@ class OverlayRenderer(
         try {
             rtmpCamera.glInterface.addFilter(filter)
             filters[item.id] = filter
-        } catch (_: Exception) {
+            android.util.Log.d("OverlayRenderer", "Successfully attached filter for ${item.id}")
+        } catch (e: Exception) {
             // glInterface may not be ready yet — caller will retry via applyOverlays.
+            android.util.Log.e("OverlayRenderer", "Failed to attach filter for ${item.id}", e)
             bitmaps.remove(item.id)?.recycle()
             videoPlayers.remove(item.id)?.release()
         }
@@ -151,7 +202,19 @@ class OverlayRenderer(
             rtmpCamera.glInterface.removeFilter(filter)
         } catch (_: Exception) { }
         videoPlayers.remove(id)?.release()
+        // Don't recycle bitmaps or clear gif bytes - keep them cached for re-application
+        // bitmaps.remove(item.id)?.recycle()
+        // gifBytes.remove(item.id)
+    }
+    
+    /**
+     * Permanently delete an overlay and its cached resources.
+     * Use this when an overlay is deleted from the store, not just hidden.
+     */
+    fun deleteOverlay(id: String) {
+        removeOverlay(id)
         bitmaps.remove(id)?.recycle()
+        gifBytes.remove(id)
     }
 
     /**
@@ -160,7 +223,17 @@ class OverlayRenderer(
     fun release() {
         pendingLoads.values.forEach { it.cancel() }
         pendingLoads.clear()
-        filters.keys.toList().forEach { removeOverlay(it) }
+        filters.keys.toList().forEach { id ->
+            filters.remove(id)?.let { filter ->
+                try {
+                    rtmpCamera.glInterface.removeFilter(filter)
+                } catch (_: Exception) { }
+            }
+            videoPlayers.remove(id)?.release()
+        }
+        bitmaps.values.forEach { it.recycle() }
+        bitmaps.clear()
+        gifBytes.clear()
         scope.cancel()
     }
 
