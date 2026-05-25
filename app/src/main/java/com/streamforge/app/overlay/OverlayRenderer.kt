@@ -53,9 +53,16 @@ class OverlayRenderer(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastItems: List<OverlayItem> = emptyList()
     private var verifyAttempts = 0
+
+    // Ids whose texture has already been force-reloaded since their current filter was
+    // attached. The very first GL texture upload can race the render thread and land
+    // blank (the "empty square until I toggle the eye icon" symptom). The verify sweep
+    // forces exactly one re-upload per attach — the automatic equivalent of the toggle.
+    private val texturesHealed = mutableSetOf<String>()
+
     private val verifyRunnable = object : Runnable {
         override fun run() {
-            reconcile(lastItems)
+            reconcile(lastItems, forceTextureReload = true)
             verifyAttempts++
             if (verifyAttempts < MAX_VERIFY_ATTEMPTS) {
                 mainHandler.postDelayed(this, VERIFY_INTERVAL_MS)
@@ -77,7 +84,7 @@ class OverlayRenderer(
         mainHandler.postDelayed(verifyRunnable, VERIFY_INTERVAL_MS)
     }
 
-    private fun reconcile(items: List<OverlayItem>) {
+    private fun reconcile(items: List<OverlayItem>, forceTextureReload: Boolean = false) {
         android.util.Log.d("OverlayRenderer", "applyOverlays called with ${items.size} items")
         val visible = items.filter { it.visible }
         android.util.Log.d("OverlayRenderer", "Visible items: ${visible.size}, Current filters: ${filters.size}")
@@ -97,6 +104,8 @@ class OverlayRenderer(
             if (filters.containsKey(item.id)) {
                 android.util.Log.d("OverlayRenderer", "Updating existing overlay ${item.id}")
                 updateOverlay(item)
+                // Heal a possibly-blank first texture upload, once per attach.
+                if (forceTextureReload) healTextureOnce(item)
             } else {
                 android.util.Log.d("OverlayRenderer", "Adding new overlay ${item.id} (type: ${item::class.simpleName})")
                 addOverlay(item)
@@ -216,6 +225,14 @@ class OverlayRenderer(
         try {
             rtmpCamera.glInterface.addFilter(filter)
             filters[item.id] = filter
+            // Fresh filter instance — its texture upload hasn't been verified yet.
+            texturesHealed.remove(item.id)
+            // Timing-proof backstop: re-upload this overlay's texture shortly after the
+            // attach lands, in case the first GL upload raced the render thread and came
+            // out blank. Deduped via texturesHealed so it fires at most once per attach.
+            if (item is OverlayItem.Image || item is OverlayItem.Gif) {
+                mainHandler.postDelayed({ healTextureOnce(item) }, VERIFY_INTERVAL_MS)
+            }
             android.util.Log.d("OverlayRenderer", "Successfully attached filter for ${item.id}")
         } catch (e: Exception) {
             // glInterface may not be ready yet — caller will retry via applyOverlays.
@@ -227,6 +244,7 @@ class OverlayRenderer(
 
     fun removeOverlay(id: String) {
         pendingLoads.remove(id)?.cancel()
+        texturesHealed.remove(id)
         val filter = filters.remove(id) ?: return
         try {
             rtmpCamera.glInterface.removeFilter(filter)
@@ -235,6 +253,48 @@ class OverlayRenderer(
         // Don't recycle bitmaps or clear gif bytes - keep them cached for re-application
         // bitmaps.remove(item.id)?.recycle()
         // gifBytes.remove(item.id)
+    }
+
+    /**
+     * Re-upload an overlay's texture at most once per attach (deduped via texturesHealed).
+     * Both the post-attach backstop and the verify sweep funnel through here, so a given
+     * filter instance is healed exactly once no matter which fires first.
+     */
+    private fun healTextureOnce(item: OverlayItem) {
+        if (item.id in texturesHealed) return
+        if (reloadTexture(item)) texturesHealed.add(item.id)
+    }
+
+    /**
+     * Force a one-shot texture re-upload for an attached image/GIF overlay.
+     * Re-issuing setImage/setGif flips the filter's shouldLoad flag, so the GL thread
+     * releases the (possibly blank) texture and uploads it again on the next frame —
+     * the same effect as toggling visibility off/on, without detaching the filter.
+     * Returns true if a reload was issued.
+     */
+    private fun reloadTexture(item: OverlayItem): Boolean {
+        val filter = filters[item.id] ?: return false
+        return when {
+            item is OverlayItem.Image && filter is ImageObjectFilterRender -> {
+                val bmp = bitmaps[item.id]
+                if (bmp != null && !bmp.isRecycled) {
+                    filter.setImage(bmp)
+                    android.util.Log.d("OverlayRenderer", "Healed texture for image ${item.id}")
+                    true
+                } else false
+            }
+            item is OverlayItem.Gif && filter is GifObjectFilterRender -> {
+                val bytes = gifBytes[item.id] ?: return false
+                try {
+                    filter.setGif(ByteArrayInputStream(bytes))
+                    android.util.Log.d("OverlayRenderer", "Healed texture for gif ${item.id}")
+                    true
+                } catch (_: Exception) {
+                    false
+                }
+            }
+            else -> false
+        }
     }
     
     /**
@@ -251,7 +311,7 @@ class OverlayRenderer(
      * Tear down all overlays and release MediaPlayers. Call from Activity.onDestroy.
      */
     fun release() {
-        mainHandler.removeCallbacks(verifyRunnable)
+        mainHandler.removeCallbacksAndMessages(null)
         pendingLoads.values.forEach { it.cancel() }
         pendingLoads.clear()
         filters.keys.toList().forEach { id ->
@@ -265,6 +325,7 @@ class OverlayRenderer(
         bitmaps.values.forEach { it.recycle() }
         bitmaps.clear()
         gifBytes.clear()
+        texturesHealed.clear()
         scope.cancel()
     }
 
