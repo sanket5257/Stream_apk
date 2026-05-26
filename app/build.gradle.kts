@@ -15,6 +15,12 @@ val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
 
+// Load local.properties for Supabase credentials
+val localPropsFile = rootProject.file("local.properties")
+val localProps = Properties().apply {
+    if (localPropsFile.exists()) localPropsFile.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.streamforge.app"
     compileSdk = 34
@@ -28,6 +34,17 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        
+        // Supabase credentials from local.properties or environment variables
+        val supabaseUrl = localProps.getProperty("SUPABASE_URL")
+            ?: System.getenv("SUPABASE_URL") 
+            ?: "YOUR_SUPABASE_URL"
+        val supabaseKey = localProps.getProperty("SUPABASE_KEY")
+            ?: System.getenv("SUPABASE_KEY") 
+            ?: "YOUR_SUPABASE_ANON_KEY"
+            
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
     }
 
     signingConfigs {
@@ -97,6 +114,7 @@ dependencies {
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.constraintlayout)
 
     // Material Components
@@ -111,6 +129,12 @@ dependencies {
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
+
+    // Supabase
+    implementation(platform("io.github.jan-tennert.supabase:bom:2.5.4"))
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.github.jan-tennert.supabase:realtime-kt")
+    implementation("io.ktor:ktor-client-android:2.3.12")
 
     // RTMP streaming + OpenGL overlay pipeline
     implementation(libs.rootencoder.library)

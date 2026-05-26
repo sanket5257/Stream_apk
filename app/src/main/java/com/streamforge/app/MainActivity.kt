@@ -6,10 +6,15 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.streamforge.app.auth.AuthManager
+import com.streamforge.app.auth.LoginActivity
 import com.streamforge.app.databinding.ActivityMainBinding
 import com.streamforge.app.storage.StreamConfig
 import com.streamforge.app.storage.StreamPrefs
@@ -24,6 +29,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var streamPrefs: StreamPrefs
+    private lateinit var authManager: AuthManager
     private var isInitialLoad = true
 
     // Resolution options
@@ -44,12 +50,49 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         streamPrefs = StreamPrefs(this)
+        authManager = AuthManager(this)
 
+        setupToolbar()
         setupResolutionDropdown()
         setupBitrateSliders()
         setupMicDropdown()
         setupSaveButton()
         setupDevMenu()
+    }
+    
+    private fun setupToolbar() {
+        setSupportActionBar(binding.toolbar)
+        supportActionBar?.title = getString(R.string.app_name)
+    }
+    
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_main, menu)
+        return true
+    }
+    
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_logout -> {
+                showLogoutDialog()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+    
+    private fun showLogoutDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Logout")
+            .setMessage("Are you sure you want to logout? This will free up your device slot and you'll need to login again.")
+            .setPositiveButton("Logout") { _, _ ->
+                lifecycleScope.launch {
+                    authManager.logout()
+                    startActivity(Intent(this@MainActivity, LoginActivity::class.java))
+                    finish()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     override fun onResume() {
@@ -131,6 +174,10 @@ class MainActivity : AppCompatActivity() {
             if (validateInputs()) {
                 saveConfigAndLaunchStream()
             }
+        }
+        
+        binding.btnLogout.setOnClickListener {
+            showLogoutDialog()
         }
     }
 

@@ -1,0 +1,13 @@
+# Supabase Configuration
+# Copy this file to local.properties and fill in your actual values
+# DO NOT commit local.properties to version control!
+
+# Get these values from: https://app.supabase.com → Your Project → Settings → API
+
+# Project URL (e.g., https://xxxxxxxxxxxxx.supabase.co)
+SUPABASE_URL=https://xxxxxxxxxxxxx.supabase.co
+
+# Anon/Public Key (long string starting with eyJ...)
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your_actual_key_here
+
+# Note: The anon key is safe to use in client apps when combined with Row Level Security (RLS)

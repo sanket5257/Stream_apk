@@ -37,8 +37,9 @@
         android:theme="@style/Theme.StreamForge"
         tools:targetApi="31">
 
+        <!-- Login activity is now the launcher -->
         <activity
-            android:name=".MainActivity"
+            android:name=".auth.LoginActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
@@ -46,6 +47,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Device management activity -->
+        <activity
+            android:name=".auth.DeviceManagerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <!-- Phase 2A: Camera preview activity. sensorLandscape lets the device auto-flip
              between landscape-left and landscape-right; the explicit rotate button in
