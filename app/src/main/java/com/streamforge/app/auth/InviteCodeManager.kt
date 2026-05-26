@@ -33,11 +33,13 @@ class InviteCodeManager {
             Log.d(TAG, "Code length: ${code.length}")
             Log.d(TAG, "Supabase URL: ${SupabaseClient.client.supabaseUrl}")
             
-            // Query the invite_codes table
+            // Query the invite_codes table.
+            // ilike with no wildcards = exact match but case-insensitive,
+            // so 'testcode' and 'TESTCODE' both resolve to the stored code.
             val inviteCodes = supabase.from("invite_codes")
                 .select {
                     filter {
-                        eq("code", code)
+                        ilike("code", code)
                     }
                 }
                 .decodeList<InviteCode>()

@@ -53,7 +53,7 @@ class AuthManager(private val context: Context) {
             
             // 1. Validate invite code
             val inviteCodeManager = InviteCodeManager()
-            when (val inviteResult = inviteCodeManager.validateInviteCode(inviteCode)) {
+            val canonicalCode: String = when (val inviteResult = inviteCodeManager.validateInviteCode(inviteCode)) {
                 is InviteCodeResult.Invalid -> {
                     return@withContext AuthResult.Error(inviteResult.message)
                 }
@@ -61,7 +61,8 @@ class AuthManager(private val context: Context) {
                     return@withContext AuthResult.Error(inviteResult.message)
                 }
                 is InviteCodeResult.Valid -> {
-                    // Continue with signup
+                    // Use the exact code stored in the DB (preserves casing)
+                    inviteResult.inviteCode.code
                 }
             }
             
@@ -105,7 +106,9 @@ class AuthManager(private val context: Context) {
             )
             
             val insertedUsers = supabase.from("users")
-                .insert(newUser)
+                .insert(newUser) {
+                    select() // return the inserted row (Prefer: return=representation)
+                }
                 .decodeList<User>()
             
             if (insertedUsers.isEmpty()) {
@@ -114,8 +117,8 @@ class AuthManager(private val context: Context) {
             
             val user = insertedUsers.first()
             
-            // 5. Mark invite code as used
-            val codeMarked = inviteCodeManager.markInviteCodeAsUsed(inviteCode, user.id)
+            // 5. Mark invite code as used (use canonical DB code, not user input)
+            val codeMarked = inviteCodeManager.markInviteCodeAsUsed(canonicalCode, user.id)
             if (!codeMarked) {
                 Log.w(TAG, "Failed to mark invite code as used, but user was created")
             }
