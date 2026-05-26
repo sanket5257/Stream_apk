@@ -41,9 +41,9 @@ class AuthManager(private val context: Context) {
     }
     
     /**
-     * Sign up new user with email, username, and password.
+     * Sign up new user with email, username, password, and invite code.
      */
-    suspend fun signUp(email: String, username: String, password: String): AuthResult = withContext(Dispatchers.IO) {
+    suspend fun signUp(email: String, username: String, password: String, inviteCode: String): AuthResult = withContext(Dispatchers.IO) {
         try {
             val deviceId = DeviceHelper.getDeviceId(context)
             val deviceName = DeviceHelper.getDeviceName()
@@ -51,7 +51,21 @@ class AuthManager(private val context: Context) {
             
             Log.d(TAG, "Signing up user: $username")
             
-            // 1. Check if email already exists
+            // 1. Validate invite code
+            val inviteCodeManager = InviteCodeManager()
+            when (val inviteResult = inviteCodeManager.validateInviteCode(inviteCode)) {
+                is InviteCodeResult.Invalid -> {
+                    return@withContext AuthResult.Error(inviteResult.message)
+                }
+                is InviteCodeResult.AlreadyUsed -> {
+                    return@withContext AuthResult.Error(inviteResult.message)
+                }
+                is InviteCodeResult.Valid -> {
+                    // Continue with signup
+                }
+            }
+            
+            // 2. Check if email already exists
             val existingEmailUsers = supabase.from("users")
                 .select {
                     filter {
@@ -64,7 +78,7 @@ class AuthManager(private val context: Context) {
                 return@withContext AuthResult.Error("Email already registered")
             }
             
-            // 2. Check if username already exists
+            // 3. Check if username already exists
             val existingUsernameUsers = supabase.from("users")
                 .select {
                     filter {
@@ -77,7 +91,7 @@ class AuthManager(private val context: Context) {
                 return@withContext AuthResult.Error("Username already taken")
             }
             
-            // 3. Create new user with device binding
+            // 4. Create new user with device binding
             val now = Instant.now().toString()
             val newUser = com.streamforge.app.auth.models.NewUser(
                 email = email,
@@ -99,6 +113,13 @@ class AuthManager(private val context: Context) {
             }
             
             val user = insertedUsers.first()
+            
+            // 5. Mark invite code as used
+            val codeMarked = inviteCodeManager.markInviteCodeAsUsed(inviteCode, user.id)
+            if (!codeMarked) {
+                Log.w(TAG, "Failed to mark invite code as used, but user was created")
+            }
+            
             saveAuthData(user.id, username, deviceId)
             
             Log.d(TAG, "Sign up successful")

@@ -62,6 +62,7 @@ class LoginActivity : AppCompatActivity() {
             binding.tvTitle.text = "Create Account"
             binding.tvSubtitle.text = "Sign up to get started"
             binding.tilEmail.visibility = View.VISIBLE
+            binding.tilInviteCode.visibility = View.VISIBLE
             binding.btnLogin.text = "Sign Up"
             binding.tvToggleMode.text = "Already have an account? Login"
         } else {
@@ -69,6 +70,7 @@ class LoginActivity : AppCompatActivity() {
             binding.tvTitle.text = "Welcome Back"
             binding.tvSubtitle.text = "Login to continue"
             binding.tilEmail.visibility = View.GONE
+            binding.tilInviteCode.visibility = View.GONE
             binding.btnLogin.text = "Login"
             binding.tvToggleMode.text = "Don't have an account? Sign Up"
         }
@@ -77,12 +79,14 @@ class LoginActivity : AppCompatActivity() {
         binding.tilEmail.error = null
         binding.tilUsername.error = null
         binding.tilPassword.error = null
+        binding.tilInviteCode.error = null
     }
     
     private fun performSignUp() {
         val email = binding.etEmail.text.toString().trim()
         val username = binding.etUsername.text.toString().trim()
         val password = binding.etPassword.text.toString().trim()
+        val inviteCode = binding.etInviteCode.text.toString().trim()
         
         // Validation
         var isValid = true
@@ -117,12 +121,19 @@ class LoginActivity : AppCompatActivity() {
             binding.tilPassword.error = null
         }
         
+        if (inviteCode.isEmpty()) {
+            binding.tilInviteCode.error = "Please enter an invite code"
+            isValid = false
+        } else {
+            binding.tilInviteCode.error = null
+        }
+        
         if (!isValid) return
         
         setLoading(true)
         
         lifecycleScope.launch {
-            when (val result = authManager.signUp(email, username, password)) {
+            when (val result = authManager.signUp(email, username, password, inviteCode)) {
                 is AuthResult.Success -> {
                     Toast.makeText(
                         this@LoginActivity,
@@ -218,6 +229,7 @@ class LoginActivity : AppCompatActivity() {
         binding.etEmail.isEnabled = !loading
         binding.etUsername.isEnabled = !loading
         binding.etPassword.isEnabled = !loading
+        binding.etInviteCode.isEnabled = !loading
         binding.tvToggleMode.isEnabled = !loading
     }
 }

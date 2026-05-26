@@ -91,3 +91,7 @@ Thumbs.db
 # Stream keys / secrets (just in case)
 *.secret
 secrets.properties
+
+# Environment variables (admin tools)
+.env
+admin_tools/.env
