@@ -175,10 +175,6 @@ class MainActivity : AppCompatActivity() {
                 saveConfigAndLaunchStream()
             }
         }
-        
-        binding.btnLogout.setOnClickListener {
-            showLogoutDialog()
-        }
     }
 
     private fun setupDevMenu() {

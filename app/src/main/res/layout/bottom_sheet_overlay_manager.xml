@@ -33,8 +33,21 @@
             app:icon="@android:drawable/ic_menu_close_clear_cancel" />
     </LinearLayout>
 
+    <!-- Live notice: adding overlays is blocked while streaming -->
+    <TextView
+        android:id="@+id/tvLiveAddNotice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="8dp"
+        android:text="@string/cannot_add_overlay_while_live"
+        android:textColor="#E53935"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- Add buttons row 1: Image + Text -->
     <LinearLayout
+        android:id="@+id/addButtonsRow1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
@@ -64,6 +77,7 @@
 
     <!-- Add buttons row 2: GIF + Video -->
     <LinearLayout
+        android:id="@+id/addButtonsRow2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"

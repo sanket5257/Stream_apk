@@ -60,6 +60,7 @@
     <string name="toggle_visibility">Toggle visibility</string>
     <string name="delete_overlay">Delete overlay</string>
     <string name="no_overlays">No overlays yet.\nTap a button above to add one.</string>
+    <string name="cannot_add_overlay_while_live">Cannot add overlays while live. Stop the stream first.</string>
     <string name="close">Close</string>
     <string name="overlays">Overlays</string>
 

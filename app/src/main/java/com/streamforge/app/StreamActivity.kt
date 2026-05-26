@@ -55,6 +55,10 @@ class StreamActivity : AppCompatActivity() {
     private var streamService: StreamService? = null
     private var isServiceBound = false
 
+    // Reference to the currently-shown overlay manager sheet (if any) so we can refresh
+    // its add-control enabled state when the stream goes live / stops while it's open.
+    private var overlayManagerSheet: OverlayManagerBottomSheet? = null
+
     // Set when the preview surface is destroyed while streaming (e.g. the system media
     // picker covers the screen). Triggers an automatic stream restart once the surface
     // — and with it the GL pipeline / encoder feed — is recreated.
@@ -321,6 +325,9 @@ class StreamActivity : AppCompatActivity() {
     }
 
     private fun updateUIForState(state: StreamState) {
+        // Keep the overlay manager's add-controls in sync if it's open while the stream
+        // starts/stops (e.g. user opens the sheet, then the stream auto-reconnects).
+        overlayManagerSheet?.updateAddControlsState()
         when (state) {
             is StreamState.Idle -> {
                 binding.tvStreamStatus.text = getString(R.string.status_idle)
@@ -433,14 +440,30 @@ class StreamActivity : AppCompatActivity() {
         return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
     }
     
+    /**
+     * Whether the stream is currently live. Connecting/reconnecting counts as live —
+     * the encoder pipeline is (or is about to be) running, and adding overlays then is
+     * what causes problems. Consistent with the guards in surfaceDestroyed /
+     * onConfigurationChanged.
+     */
+    private fun isStreamLive(): Boolean {
+        if (!::streamManager.isInitialized) return false
+        val state = streamManager.state.value
+        return state is StreamState.Live || state is StreamState.Connecting
+    }
+
     private fun showOverlayManager() {
         val bottomSheet = OverlayManagerBottomSheet.newInstance()
+        // Block the ADD-overlay actions while the stream is live; the sheet asks this
+        // predicate and disables/greys out its add buttons accordingly.
+        bottomSheet.setLiveStateProvider { isStreamLive() }
         bottomSheet.setOnOverlaysChangedListener { overlays ->
             // Persisted store changed (add / delete / visibility / text edit).
             // Push the new list to both the gesture surface and the filter pipeline.
             binding.overlayEditor.setItems(overlays)
             overlayRenderer?.applyOverlays(overlays)
         }
+        overlayManagerSheet = bottomSheet
         bottomSheet.show(supportFragmentManager, OverlayManagerBottomSheet.TAG)
     }
 
@@ -543,6 +566,8 @@ class StreamActivity : AppCompatActivity() {
 
         overlayRenderer?.release()
         overlayRenderer = null
+
+        overlayManagerSheet = null
 
         // Unbind from service
         if (isServiceBound) {
