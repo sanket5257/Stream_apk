@@ -16,13 +16,16 @@
 -- CREATE OR REPLACE; grants/revokes are idempotent.
 -- ============================================================
 
--- 0. bcrypt support.
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- 0. bcrypt support. On Supabase, extensions live in the "extensions" schema,
+--    NOT public, so crypt()/gen_salt() must be schema-qualified everywhere
+--    (including inside SECURITY DEFINER functions, which set their own
+--    search_path). This is why a bare gen_salt() throws "function does not exist".
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 -- 1. Hash any existing plaintext passwords. bcrypt hashes start with "$2",
 --    so this only touches rows that haven't been hashed yet.
 UPDATE users
-SET password = crypt(password, gen_salt('bf'))
+SET password = extensions.crypt(password, extensions.gen_salt('bf'))
 WHERE password IS NOT NULL
   AND password NOT LIKE '$2%';
 
@@ -71,7 +74,7 @@ CREATE OR REPLACE FUNCTION app_signup(
 ) RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
     v_code invite_codes%ROWTYPE;
@@ -105,7 +108,7 @@ BEGIN
 
     INSERT INTO users (email, username, password, is_active,
                        active_device_id, device_name, device_model, last_login)
-    VALUES (p_email, p_username, crypt(p_password, gen_salt('bf')), true,
+    VALUES (p_email, p_username, extensions.crypt(p_password, extensions.gen_salt('bf')), true,
             p_device_id, p_device_name, p_device_model, now())
     RETURNING * INTO v_user;
 
@@ -125,7 +128,7 @@ CREATE OR REPLACE FUNCTION app_login(
 ) RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
     v_user users%ROWTYPE;
@@ -134,7 +137,7 @@ BEGIN
 
     -- Constant-ish failure for both "no such user" and "wrong password".
     IF NOT FOUND OR v_user.password IS NULL
-       OR v_user.password <> crypt(p_password, v_user.password) THEN
+       OR v_user.password <> extensions.crypt(p_password, v_user.password) THEN
         RETURN json_build_object('status', 'error', 'message', 'Invalid username or password');
     END IF;
 
@@ -169,7 +172,7 @@ CREATE OR REPLACE FUNCTION app_validate_session(
 ) RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
     v_user users%ROWTYPE;
@@ -196,7 +199,7 @@ CREATE OR REPLACE FUNCTION app_logout(
 ) RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 BEGIN
     UPDATE users
