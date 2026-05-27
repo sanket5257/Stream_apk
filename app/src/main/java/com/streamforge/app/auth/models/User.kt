@@ -8,7 +8,9 @@ data class User(
     val id: String,
     val email: String,
     val username: String,
-    val password: String,
+    // Never returned by the server-side auth functions; kept nullable so safe
+    // user payloads (which omit the password hash) still deserialize.
+    val password: String? = null,
     @SerialName("is_active")
     val isActive: Boolean,
     @SerialName("active_device_id")

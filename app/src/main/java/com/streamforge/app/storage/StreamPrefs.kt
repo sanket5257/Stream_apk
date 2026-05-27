@@ -27,14 +27,18 @@ private val Context.streamPrefsDataStore: DataStore<Preferences> by preferencesD
  * GeneralSecurityException / IllegalStateException when the AndroidKeystore alias
  * and the encrypted prefs file get out of sync (typical after app data clear or
  * reinstall, and on some OEM ROMs). encryptedPrefs() detects that, wipes the
- * corrupted state, and retries — only falling back to plain SharedPreferences if
- * the keystore is genuinely unusable on this device.
+ * corrupted state, and retries.
+ *
+ * SECURITY: the stream key is a sensitive credential, so it is NEVER persisted in
+ * plaintext. If the keystore is genuinely unusable on this device, openSecurePrefs()
+ * returns null and the key simply isn't saved this session (the user re-enters it)
+ * rather than being written to a readable file.
  */
 class StreamPrefs(private val context: Context) {
 
-    private val encryptedPrefs: SharedPreferences by lazy { openSecurePrefs() }
+    private val encryptedPrefs: SharedPreferences? by lazy { openSecurePrefs() }
 
-    private fun openSecurePrefs(): SharedPreferences {
+    private fun openSecurePrefs(): SharedPreferences? {
         return try {
             buildEncryptedPrefs()
         } catch (e: Throwable) {
@@ -43,8 +47,8 @@ class StreamPrefs(private val context: Context) {
             try {
                 buildEncryptedPrefs()
             } catch (e2: Throwable) {
-                Log.e(TAG, "EncryptedSharedPreferences still failing — falling back to plain prefs", e2)
-                context.getSharedPreferences(PLAIN_FALLBACK_PREFS, Context.MODE_PRIVATE)
+                Log.e(TAG, "EncryptedSharedPreferences unavailable; stream key will not be persisted this session", e2)
+                null
             }
         }
     }
@@ -84,7 +88,6 @@ class StreamPrefs(private val context: Context) {
     companion object {
         private const val TAG = "StreamPrefs"
         private const val SECURE_PREFS_FILE = "secure_prefs"
-        private const val PLAIN_FALLBACK_PREFS = "stream_prefs_plain"
         private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
 
         private val KEY_RTMP_URL = stringPreferencesKey("rtmp_url")
@@ -106,7 +109,7 @@ class StreamPrefs(private val context: Context) {
     suspend fun load(): StreamConfig {
         val preferences = context.streamPrefsDataStore.data.first()
         val streamKey = try {
-            encryptedPrefs.getString(KEY_STREAM_KEY, "") ?: ""
+            encryptedPrefs?.getString(KEY_STREAM_KEY, "") ?: ""
         } catch (e: Throwable) {
             Log.w(TAG, "Reading stream key failed; returning empty", e)
             ""
@@ -143,21 +146,26 @@ class StreamPrefs(private val context: Context) {
 
         // Save sensitive stream key to encrypted preferences.
         // commit() (not apply) so a write-failure propagates as a return value we can react to.
+        val prefs = encryptedPrefs
+        if (prefs == null) {
+            // Keystore unusable on this device — do NOT fall back to plaintext.
+            Log.e(TAG, "Encrypted prefs unavailable; stream key not persisted (re-enter next session)")
+            return
+        }
         val committed = try {
-            encryptedPrefs.edit().putString(KEY_STREAM_KEY, config.streamKey).commit()
+            prefs.edit().putString(KEY_STREAM_KEY, config.streamKey).commit()
         } catch (e: Throwable) {
             Log.w(TAG, "Encrypted write failed; healing and retrying", e)
             clearSecureState()
-            // Retry once with a fresh keystore. Use the property again — the by lazy was already
-            // resolved, so we manually rebuild here.
+            // Retry once with a fresh keystore. The by lazy was already resolved, so rebuild here.
             try {
                 buildEncryptedPrefs().edit().putString(KEY_STREAM_KEY, config.streamKey).commit()
             } catch (e2: Throwable) {
-                Log.e(TAG, "Encrypted write still failing; persisting key to plain fallback", e2)
-                context.getSharedPreferences(PLAIN_FALLBACK_PREFS, Context.MODE_PRIVATE)
-                    .edit().putString(KEY_STREAM_KEY, config.streamKey).commit()
+                // Never persist the key in plaintext. Skip saving instead.
+                Log.e(TAG, "Encrypted write still failing; stream key not persisted", e2)
+                false
             }
         }
-        if (!committed) Log.w(TAG, "Stream key commit returned false")
+        if (!committed) Log.w(TAG, "Stream key was not saved")
     }
 }
