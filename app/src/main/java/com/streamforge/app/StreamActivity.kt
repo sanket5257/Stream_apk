@@ -343,7 +343,7 @@ class StreamActivity : AppCompatActivity() {
                 binding.tvStreamStatus.text = getString(R.string.status_connecting)
                 binding.tvStreamStatus.setTextColor(Color.parseColor("#FFA726"))
                 binding.btnGoLive.text = getString(R.string.stop)
-                binding.btnSwitchCamera.isEnabled = false
+                binding.btnSwitchCamera.isEnabled = true
             }
             is StreamState.Live -> {
                 binding.tvStreamStatus.text = getString(R.string.status_live)
@@ -351,7 +351,7 @@ class StreamActivity : AppCompatActivity() {
                 binding.btnGoLive.text = getString(R.string.stop)
                 binding.btnGoLive.backgroundTintList =
                     android.content.res.ColorStateList.valueOf(Color.DKGRAY)
-                binding.btnSwitchCamera.isEnabled = false
+                binding.btnSwitchCamera.isEnabled = true
                 startStatsHud()
             }
             is StreamState.Failed -> {
