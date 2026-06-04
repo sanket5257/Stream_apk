@@ -10,61 +10,113 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:gravity="center_vertical">
+        android:orientation="vertical"
+        android:padding="12dp">
 
-        <!-- Thumbnail/Icon -->
-        <ImageView
-            android:id="@+id/ivOverlayIcon"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:scaleType="centerCrop"
-            android:contentDescription="@string/overlay_icon" />
-
-        <!-- Overlay Info -->
+        <!-- Top row: thumbnail, info, visibility, delete -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:layout_marginStart="12dp">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-            <TextView
-                android:id="@+id/tvOverlayName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="?android:textColorPrimary" />
+            <!-- Thumbnail/Icon -->
+            <ImageView
+                android:id="@+id/ivOverlayIcon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:scaleType="centerCrop"
+                android:contentDescription="@string/overlay_icon" />
 
-            <TextView
-                android:id="@+id/tvOverlayDetails"
-                android:layout_width="wrap_content"
+            <!-- Overlay Info -->
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:textColor="?android:textColorSecondary"
-                android:layout_marginTop="4dp" />
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="12dp">
+
+                <TextView
+                    android:id="@+id/tvOverlayName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="?android:textColorPrimary" />
+
+                <TextView
+                    android:id="@+id/tvOverlayDetails"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="?android:textColorSecondary"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+
+            <!-- Visibility Toggle -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnToggleVisibility"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="@string/toggle_visibility"
+                app:icon="@android:drawable/ic_menu_view"
+                app:iconTint="?attr/colorPrimary" />
+
+            <!-- Delete Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDelete"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="@string/delete_overlay"
+                app:icon="@android:drawable/ic_menu_delete"
+                app:iconTint="?attr/colorError" />
         </LinearLayout>
 
-        <!-- Visibility Toggle -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnToggleVisibility"
-            style="@style/Widget.Material3.Button.IconButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:contentDescription="@string/toggle_visibility"
-            app:icon="@android:drawable/ic_menu_view"
-            app:iconTint="?attr/colorPrimary" />
+        <!-- Size control row: shrink button, slider, grow button -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
 
-        <!-- Delete Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnDelete"
-            style="@style/Widget.Material3.Button.IconButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:contentDescription="@string/delete_overlay"
-            app:icon="@android:drawable/ic_menu_delete"
-            app:iconTint="?attr/colorError" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/overlay_size_label"
+                android:textSize="12sp"
+                android:textColor="?android:textColorSecondary" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSizeDown"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:contentDescription="@string/overlay_size_decrease"
+                app:icon="@android:drawable/ic_input_delete"
+                app:iconTint="?attr/colorPrimary" />
+
+            <SeekBar
+                android:id="@+id/seekSize"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="100" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSizeUp"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:contentDescription="@string/overlay_size_increase"
+                app:icon="@android:drawable/ic_input_add"
+                app:iconTint="?attr/colorPrimary" />
+        </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

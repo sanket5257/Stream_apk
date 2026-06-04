@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import com.streamforge.app.overlay.OverlayItem
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
 
@@ -94,6 +95,13 @@ class OverlayEditorView @JvmOverloads constructor(
     private var currentAngle = 0f
     private var isRotating = false
 
+    // A two-finger pinch (resize) inevitably wobbles the finger-to-finger angle a few
+    // degrees, which previously leaked into rotation — the overlay appeared to spin /
+    // tilt on its z-axis while the user only meant to change its size. Ignore rotation
+    // until the twist deliberately exceeds this dead-zone, then re-baseline so there's
+    // no jump when real rotation engages.
+    private var rotationActivated = false
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
@@ -166,6 +174,7 @@ class OverlayEditorView @JvmOverloads constructor(
                 if (event.pointerCount == 2) {
                     // Start rotation detection
                     isRotating = true
+                    rotationActivated = false
                     initialAngle = getAngle(event)
                     currentAngle = getSelectedItem()?.rotation ?: 0f
                 }
@@ -188,10 +197,21 @@ class OverlayEditorView @JvmOverloads constructor(
                     lastTouchX = x
                     lastTouchY = y
                 } else if (event.pointerCount == 2 && isRotating) {
-                    // Two finger rotation
+                    // Two finger rotation — gated behind a dead-zone so a pure pinch to
+                    // resize doesn't accidentally rotate the overlay on its z-axis.
                     val angle = getAngle(event)
-                    val deltaAngle = angle - initialAngle
-                    rotateSelectedItem(currentAngle + deltaAngle)
+                    if (!rotationActivated) {
+                        if (abs(angle - initialAngle) >= ROTATION_DEADZONE_DEG) {
+                            // Deliberate twist detected — re-baseline from here so rotation
+                            // starts smoothly instead of jumping by the dead-zone amount.
+                            rotationActivated = true
+                            initialAngle = angle
+                            currentAngle = getSelectedItem()?.rotation ?: 0f
+                        }
+                    }
+                    if (rotationActivated) {
+                        rotateSelectedItem(currentAngle + (angle - initialAngle))
+                    }
                 }
                 
                 invalidate()
@@ -201,11 +221,13 @@ class OverlayEditorView @JvmOverloads constructor(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 activePointerId = MotionEvent.INVALID_POINTER_ID
                 isRotating = false
+                rotationActivated = false
             }
-            
+
             MotionEvent.ACTION_CANCEL -> {
                 activePointerId = MotionEvent.INVALID_POINTER_ID
                 isRotating = false
+                rotationActivated = false
             }
         }
         
@@ -314,5 +336,11 @@ class OverlayEditorView @JvmOverloads constructor(
             scaleSelectedItem(detector.scaleFactor)
             return true
         }
+    }
+
+    private companion object {
+        // Minimum two-finger twist (degrees) before a pinch is treated as a rotation
+        // rather than a pure resize. Keeps resizing from drifting on the z-axis.
+        const val ROTATION_DEADZONE_DEG = 12f
     }
 }

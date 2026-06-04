@@ -7,13 +7,11 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.streamforge.app.R
 import com.streamforge.app.databinding.BottomSheetOverlayManagerBinding
 import com.streamforge.app.overlay.OverlayItem
 import com.streamforge.app.overlay.OverlayStore
@@ -35,14 +33,11 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     private var onOverlaysChanged: ((List<OverlayItem>) -> Unit)? = null
 
     /**
-     * Supplied by the host (StreamActivity). Returns true while the stream is live or
-     * connecting/reconnecting. Adding overlays mid-stream resets the GL pipeline and
-     * causes problems, so the ADD actions are blocked whenever this reports true.
-     * Editing/moving/deleting existing overlays remains allowed.
+     * Fired continuously while the user drags a row's size slider, so the host can update
+     * the live GL preview without a full store round-trip. Persistence happens separately
+     * once the gesture settles.
      */
-    private var isLiveProvider: (() -> Boolean)? = null
-
-    private fun isLive(): Boolean = isLiveProvider?.invoke() == true
+    private var onOverlayLiveUpdate: ((OverlayItem) -> Unit)? = null
 
     private val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -120,6 +115,17 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
             },
             onEdit = { item ->
                 if (item is OverlayItem.Text) showTextDialog(item)
+            },
+            onScaleChange = { item, scale ->
+                // Live preview only — cheap GL transform, no I/O.
+                onOverlayLiveUpdate?.invoke(item.withScale(scale))
+            },
+            onScaleSettled = { item, scale ->
+                // Gesture finished — persist the final size and re-broadcast the list.
+                lifecycleScope.launch {
+                    overlayStore.updateOverlay(item.withScale(scale))
+                    loadOverlays()
+                }
             }
         )
         binding.rvOverlays.layoutManager = LinearLayoutManager(requireContext())
@@ -130,67 +136,23 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     private fun setupButtons() {
         binding.btnClose.setOnClickListener { dismiss() }
         binding.btnAddImage.setOnClickListener {
-            if (guardAddWhileLive()) return@setOnClickListener
             openPicker("image/*", imagePickerLauncher)
         }
         binding.btnAddGif.setOnClickListener {
-            if (guardAddWhileLive()) return@setOnClickListener
             openPicker("image/gif", gifPickerLauncher)
         }
         binding.btnAddVideo.setOnClickListener {
-            if (guardAddWhileLive()) return@setOnClickListener
             openPicker("video/*", videoPickerLauncher)
         }
         binding.btnAddText.setOnClickListener {
-            if (guardAddWhileLive()) return@setOnClickListener
             showTextDialog(null)
         }
-        updateAddControlsState()
-    }
-
-    /**
-     * Reflect live state in the add controls: grey out / disable the ADD buttons and
-     * show a notice when the stream is live. Safe to call repeatedly (e.g. when the
-     * stream goes live while this sheet is already open).
-     */
-    fun updateAddControlsState() {
-        if (_binding == null) return
-        val live = isLive()
-        val enabled = !live
-        binding.btnAddImage.isEnabled = enabled
-        binding.btnAddText.isEnabled = enabled
-        binding.btnAddGif.isEnabled = enabled
-        binding.btnAddVideo.isEnabled = enabled
-        val alpha = if (enabled) 1f else 0.4f
-        binding.btnAddImage.alpha = alpha
-        binding.btnAddText.alpha = alpha
-        binding.btnAddGif.alpha = alpha
-        binding.btnAddVideo.alpha = alpha
-        binding.tvLiveAddNotice.isVisible = live
-    }
-
-    /**
-     * Robustness guard at the actual add entry point. Even if the UI enabled-state lags
-     * behind a state change, this blocks the add and informs the user. Returns true when
-     * the action was blocked (caller should return early).
-     */
-    private fun guardAddWhileLive(): Boolean {
-        if (!isLive()) return false
-        Toast.makeText(
-            requireContext(),
-            R.string.cannot_add_overlay_while_live,
-            Toast.LENGTH_SHORT
-        ).show()
-        updateAddControlsState()
-        return true
     }
 
     private fun showTextDialog(existing: OverlayItem.Text?) {
         val dialog = TextOverlayDialog()
         existing?.let { dialog.setExisting(it) }
         dialog.setOnResult { result ->
-            // Editing an existing overlay is fine while live; adding a new one is not.
-            if (existing == null && guardAddWhileLive()) return@setOnResult
             lifecycleScope.launch {
                 if (existing != null) overlayStore.updateOverlay(result)
                 else overlayStore.addOverlay(result)
@@ -219,8 +181,6 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         build: (Uri) -> OverlayItem
     ) {
         if (resultCode != Activity.RESULT_OK) return
-        // The stream may have gone live while the system picker was open. Block the add.
-        if (guardAddWhileLive()) return
         val uri = data?.data ?: return
         try {
             requireContext().contentResolver.takePersistableUriPermission(
@@ -250,14 +210,16 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         onOverlaysChanged = listener
     }
 
-    /**
-     * Host supplies a predicate reporting whether the stream is currently live (or
-     * connecting/reconnecting). Used to block the ADD-overlay actions during a live stream.
-     */
-    fun setLiveStateProvider(provider: () -> Boolean) {
-        isLiveProvider = provider
-        // If the view is already created, reflect the latest state immediately.
-        if (_binding != null) updateAddControlsState()
+    fun setOnOverlayLiveUpdateListener(listener: (OverlayItem) -> Unit) {
+        onOverlayLiveUpdate = listener
+    }
+
+    /** Returns a copy of this overlay with [scale] applied, preserving all other fields. */
+    private fun OverlayItem.withScale(scale: Float): OverlayItem = when (this) {
+        is OverlayItem.Image -> copy().also { it.scale = scale }
+        is OverlayItem.Text -> copy().also { it.scale = scale }
+        is OverlayItem.Gif -> copy().also { it.scale = scale }
+        is OverlayItem.Video -> copy().also { it.scale = scale }
     }
 
     override fun onDestroyView() {

@@ -59,8 +59,11 @@
     <string name="overlay_icon">Overlay icon</string>
     <string name="toggle_visibility">Toggle visibility</string>
     <string name="delete_overlay">Delete overlay</string>
+    <string name="text_scroll_label">Scroll horizontally (news ticker)</string>
+    <string name="overlay_size_label">Size</string>
+    <string name="overlay_size_decrease">Decrease size</string>
+    <string name="overlay_size_increase">Increase size</string>
     <string name="no_overlays">No overlays yet.\nTap a button above to add one.</string>
-    <string name="cannot_add_overlay_while_live">Cannot add overlays while live. Stop the stream first.</string>
     <string name="close">Close</string>
     <string name="overlays">Overlays</string>
 

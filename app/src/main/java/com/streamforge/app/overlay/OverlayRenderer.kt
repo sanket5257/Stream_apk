@@ -60,6 +60,20 @@ class OverlayRenderer(
     // forces exactly one re-upload per attach — the automatic equivalent of the toggle.
     private val texturesHealed = mutableSetOf<String>()
 
+    // News-ticker scrolling state. For each scrolling Text overlay we drive its horizontal
+    // position ourselves frame-by-frame instead of using its static x; the map holds the
+    // current left-edge position (percent of stream width). A single repeating runnable
+    // advances every scrolling overlay so one timer covers any number of tickers.
+    private val scrollPositions = mutableMapOf<String, Float>()
+    private var scrollRunning = false
+
+    private val scrollRunnable = object : Runnable {
+        override fun run() {
+            tickScroll()
+            if (scrollRunning) mainHandler.postDelayed(this, SCROLL_FRAME_MS)
+        }
+    }
+
     private val verifyRunnable = object : Runnable {
         override fun run() {
             reconcile(lastItems, forceTextureReload = true)
@@ -112,6 +126,46 @@ class OverlayRenderer(
             }
         }
         android.util.Log.d("OverlayRenderer", "applyOverlays complete. Filters: ${filters.size}, Bitmaps cached: ${bitmaps.size}, GIFs cached: ${gifBytes.size}")
+        updateScrollLoop()
+    }
+
+    /**
+     * Start or stop the ticker animation depending on whether any visible scrolling text
+     * overlay currently exists, and drop scroll state for overlays that no longer scroll.
+     */
+    private fun updateScrollLoop() {
+        val activeIds = lastItems
+            .filter { it is OverlayItem.Text && it.scroll && it.visible }
+            .map { it.id }
+            .toSet()
+        scrollPositions.keys.retainAll(activeIds)
+
+        if (activeIds.isNotEmpty() && !scrollRunning) {
+            scrollRunning = true
+            mainHandler.post(scrollRunnable)
+        } else if (activeIds.isEmpty() && scrollRunning) {
+            scrollRunning = false
+            mainHandler.removeCallbacks(scrollRunnable)
+        }
+    }
+
+    /**
+     * Advance every scrolling text overlay one frame: move its left edge leftward and wrap
+     * back to the right edge once it has fully exited on the left.
+     */
+    private fun tickScroll() {
+        lastItems.forEach { item ->
+            if (item !is OverlayItem.Text || !item.scroll || !item.visible) return@forEach
+            val filter = filters[item.id] as? BaseObjectFilterRender ?: return@forEach
+            val sizePercent = 20f * item.scale
+            var x = scrollPositions[item.id] ?: 100f
+            x -= SCROLL_SPEED_PERCENT_PER_FRAME
+            // Wrap once the whole overlay has slid off the left edge.
+            if (x <= -sizePercent) x = 100f
+            scrollPositions[item.id] = x
+            val topLeftY = (item.y * 100f) - (sizePercent / 2f)
+            filter.setPosition(x, topLeftY)
+        }
     }
 
     /**
@@ -266,6 +320,8 @@ class OverlayRenderer(
      */
     fun onPipelineReset() {
         mainHandler.removeCallbacksAndMessages(null)
+        scrollRunning = false
+        scrollPositions.clear()
         pendingLoads.values.forEach { it.cancel() }
         pendingLoads.clear()
         filters.keys.toList().forEach { id ->
@@ -335,6 +391,8 @@ class OverlayRenderer(
      */
     fun release() {
         mainHandler.removeCallbacksAndMessages(null)
+        scrollRunning = false
+        scrollPositions.clear()
         pendingLoads.values.forEach { it.cancel() }
         pendingLoads.clear()
         filters.keys.toList().forEach { id ->
@@ -356,9 +414,17 @@ class OverlayRenderer(
         if (filter !is BaseObjectFilterRender) return
         val baseSize = 20f
         val sizePercent = baseSize * item.scale
-        val topLeftX = (item.x * 100f) - (sizePercent / 2f)
         val topLeftY = (item.y * 100f) - (sizePercent / 2f)
-        filter.setPosition(topLeftX, topLeftY)
+        if (item is OverlayItem.Text && item.scroll) {
+            // The ticker loop owns the horizontal position; seed it (off the right edge)
+            // and let tickScroll drive it from here so the two don't fight.
+            val x = scrollPositions.getOrPut(item.id) { 100f }
+            filter.setPosition(x, topLeftY)
+        } else {
+            val topLeftX = (item.x * 100f) - (sizePercent / 2f)
+            filter.setPosition(topLeftX, topLeftY)
+            scrollPositions.remove(item.id)
+        }
         filter.setScale(sizePercent, sizePercent)
         filter.setRotation(item.rotation.toInt())
     }
@@ -411,5 +477,10 @@ class OverlayRenderer(
         // items and only (re)adds genuinely-missing or failed ones.
         const val VERIFY_INTERVAL_MS = 300L
         const val MAX_VERIFY_ATTEMPTS = 2
+
+        // News-ticker animation: advance ~33ms/frame (~30fps). At 0.35%/frame the text
+        // crosses the full width in ~10s — readable, like a broadcast lower-third ticker.
+        const val SCROLL_FRAME_MS = 33L
+        const val SCROLL_SPEED_PERCENT_PER_FRAME = 0.35f
     }
 }

@@ -41,6 +41,8 @@ sealed class OverlayItem {
         val text: String,
         val fontSizeSp: Float = 24f,
         val colorArgb: Int = 0xFFFFFFFF.toInt(),
+        /** When true the text scrolls horizontally right-to-left, like a news ticker. */
+        val scroll: Boolean = false,
         override var x: Float = 0.5f,
         override var y: Float = 0.5f,
         override var scale: Float = 1.0f,

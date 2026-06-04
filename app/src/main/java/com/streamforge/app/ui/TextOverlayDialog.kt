@@ -62,6 +62,7 @@ class TextOverlayDialog : DialogFragment() {
             binding.etText.setText(item.text)
             binding.sliderFontSize.value = item.fontSizeSp.coerceIn(12f, 96f)
             binding.etFontSize.setText(item.fontSizeSp.toInt().toString())
+            binding.switchScroll.isChecked = item.scroll
         }
 
         // Pre-fill hex field from the current color.
@@ -83,6 +84,7 @@ class TextOverlayDialog : DialogFragment() {
                     text = typed,
                     fontSizeSp = finalSize,
                     colorArgb = selectedColor,
+                    scroll = binding.switchScroll.isChecked,
                     x = existing?.x ?: 0.5f,
                     y = existing?.y ?: 0.5f,
                     scale = existing?.scale ?: 1f,
