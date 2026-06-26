@@ -41,6 +41,8 @@ sealed class OverlayItem {
         val text: String,
         val fontSizeSp: Float = 24f,
         val colorArgb: Int = 0xFFFFFFFF.toInt(),
+        /** Font family key from [OverlayFonts]; defaults to the platform default. */
+        val fontKey: String = OverlayFonts.DEFAULT_KEY,
         /** When true the text scrolls horizontally right-to-left, like a news ticker. */
         val scroll: Boolean = false,
         override var x: Float = 0.5f,
@@ -78,6 +80,27 @@ sealed class OverlayItem {
         override var x: Float = 0.5f,
         override var y: Float = 0.5f,
         override var scale: Float = 1.0f,
+        override var rotation: Float = 0f,
+        override var zIndex: Int = 0,
+        override var visible: Boolean = true
+    ) : OverlayItem()
+
+    /**
+     * Browser / URL overlay. A live web page (e.g. a StreamElements alert or chat box URL)
+     * is rendered off-screen in a WebView and composited into the stream. Browser overlays
+     * are typically full-frame transparent canvases, so [scale] defaults to 5.0 (= 100% of
+     * stream width with the renderer's 20%-base sizing) and the content keeps the
+     * [renderWidth]:[renderHeight] aspect.
+     */
+    @Serializable
+    data class Browser(
+        override val id: String,
+        val url: String,
+        val renderWidth: Int = 1280,
+        val renderHeight: Int = 720,
+        override var x: Float = 0.5f,
+        override var y: Float = 0.5f,
+        override var scale: Float = 5.0f,
         override var rotation: Float = 0f,
         override var zIndex: Int = 0,
         override var visible: Boolean = true

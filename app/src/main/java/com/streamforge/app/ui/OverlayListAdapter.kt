@@ -62,6 +62,10 @@ class OverlayListAdapter(
                     binding.tvOverlayName.text = "Video"
                     loadVideoThumbnail(item.uri)
                 }
+                is OverlayItem.Browser -> {
+                    binding.tvOverlayName.text = item.url
+                    binding.ivOverlayIcon.setImageResource(android.R.drawable.ic_menu_compass)
+                }
             }
             bindDetails(item, item.scale)
 

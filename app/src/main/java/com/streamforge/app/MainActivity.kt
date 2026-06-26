@@ -107,9 +107,9 @@ class MainActivity : AppCompatActivity() {
             resolutions.map { it.label }
         )
         binding.actvResolution.setAdapter(adapter)
-        
+
         // Set default selection
-        binding.actvResolution.setText(resolutions[1].label, false) // 720p default
+        binding.actvResolution.setText(resolutions[2].label, false) // 1080p default
     }
 
     private fun setupBitrateSliders() {
@@ -260,8 +260,8 @@ class MainActivity : AppCompatActivity() {
             try {
                 // Get selected resolution
                 val selectedResolutionLabel = binding.actvResolution.text.toString()
-                val resolution = resolutions.find { it.label == selectedResolutionLabel } 
-                    ?: resolutions[1] // Default to 720p
+                val resolution = resolutions.find { it.label == selectedResolutionLabel }
+                    ?: resolutions[2] // Default to 1080p
 
                 // Selected mic option
                 val micLabel = binding.actvMicSource.text.toString()

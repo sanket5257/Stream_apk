@@ -64,6 +64,12 @@ class OverlayEditorView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
+    private val browserPaint = Paint().apply {
+        color = Color.parseColor("#3F51B5")
+        alpha = 128
+        style = Paint.Style.FILL
+    }
+
     private val outlinePaint = Paint().apply {
         color = Color.WHITE
         alpha = 160
@@ -146,6 +152,12 @@ class OverlayEditorView @JvmOverloads constructor(
                 is OverlayItem.Video -> {
                     val rect = RectF(-60f, -45f, 60f, 45f)
                     if (showPlaceholders) canvas.drawRect(rect, videoPaint)
+                    canvas.drawRect(rect, outlinePaint)
+                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
+                }
+                is OverlayItem.Browser -> {
+                    val rect = RectF(-60f, -34f, 60f, 34f)
+                    if (showPlaceholders) canvas.drawRect(rect, browserPaint)
                     canvas.drawRect(rect, outlinePaint)
                     if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
                 }

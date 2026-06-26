@@ -122,6 +122,8 @@ class StreamActivity : AppCompatActivity() {
         // Load stream configuration
         lifecycleScope.launch {
             streamConfig = streamPrefs.load()
+            // Size overlays to the real output resolution so they aren't distorted.
+            streamConfig?.let { overlayRenderer?.setStreamSize(it.width, it.height) }
         }
 
         // Check permissions
@@ -154,7 +156,11 @@ class StreamActivity : AppCompatActivity() {
         streamManager.setCamera(rtmpCamera)
 
         // Phase 6: bridge overlay model → RootEncoder filter pipeline.
-        overlayRenderer = OverlayRenderer(applicationContext, rtmpCamera)
+        // Pass `this` (an Activity) as the window-capable context browser overlays need to
+        // host their Presentation; applicationContext can't show windows.
+        overlayRenderer = OverlayRenderer(applicationContext, rtmpCamera, this)
+        // If config already loaded, size overlays to the output resolution right away.
+        streamConfig?.let { overlayRenderer?.setStreamSize(it.width, it.height) }
         setupOverlayEditor()
 
         // Phase 7: attach a pass-through PCM effect so the level meter reads real RMS,

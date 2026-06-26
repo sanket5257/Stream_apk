@@ -151,9 +151,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:valueFrom="1000"
-            android:valueTo="8000"
+            android:valueTo="12000"
             android:stepSize="500"
-            android:value="3500"
+            android:value="6000"
             android:layout_marginBottom="16dp" />
 
         <!-- Audio Bitrate Slider -->

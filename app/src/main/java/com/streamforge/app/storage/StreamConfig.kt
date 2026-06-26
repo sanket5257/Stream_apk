@@ -26,10 +26,11 @@ data class StreamConfig(
         val DEFAULT = StreamConfig(
             rtmpUrl = "rtmp://a.rtmp.youtube.com/live2/",
             streamKey = "",
-            width = 1280,
-            height = 720,
+            width = 1920,
+            height = 1080,
             fps = 30,
-            videoBitrateKbps = 3500,
+            // YouTube's recommended bitrate for 1080p30 is ~4.5–9 Mbps; 6 Mbps is a sharp default.
+            videoBitrateKbps = 6000,
             audioBitrateKbps = 128
         )
     }

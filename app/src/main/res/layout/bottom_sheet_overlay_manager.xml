@@ -93,6 +93,16 @@
             app:icon="@android:drawable/ic_media_play" />
     </LinearLayout>
 
+    <!-- Add buttons row 3: URL / browser overlay (StreamElements etc.) -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnAddUrl"
+        style="@style/Widget.Material3.Button.Icon"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="@string/add_url"
+        app:icon="@android:drawable/ic_menu_compass" />
+
     <!-- Overlay list -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvOverlays"

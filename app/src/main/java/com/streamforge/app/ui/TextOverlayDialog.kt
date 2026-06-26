@@ -8,11 +8,13 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.GridLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 import com.streamforge.app.R
 import com.streamforge.app.databinding.DialogTextOverlayBinding
+import com.streamforge.app.overlay.OverlayFonts
 import com.streamforge.app.overlay.OverlayItem
 import java.util.UUID
 
@@ -69,6 +71,7 @@ class TextOverlayDialog : DialogFragment() {
         binding.etHex.setText(formatHex(selectedColor))
 
         bindFontSize(binding)
+        bindFontFamily(binding)
         buildSwatches(binding, density)
         bindHexInput(binding)
 
@@ -79,11 +82,13 @@ class TextOverlayDialog : DialogFragment() {
                 val typed = binding.etText.text?.toString()?.takeIf { it.isNotBlank() }
                     ?: getString(R.string.default_text_overlay)
                 val finalSize = binding.sliderFontSize.value
+                val fontKey = OverlayFonts.keyForLabel(binding.actvFont.text?.toString())
                 val result = OverlayItem.Text(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     text = typed,
                     fontSizeSp = finalSize,
                     colorArgb = selectedColor,
+                    fontKey = fontKey,
                     scroll = binding.switchScroll.isChecked,
                     x = existing?.x ?: 0.5f,
                     y = existing?.y ?: 0.5f,
@@ -123,6 +128,19 @@ class TextOverlayDialog : DialogFragment() {
                 updatingFromCode = false
             }
         })
+    }
+
+    /** Populate the font dropdown and preselect the existing overlay's font (or default). */
+    private fun bindFontFamily(binding: DialogTextOverlayBinding) {
+        val labels = OverlayFonts.ALL.map { it.label }
+        val adapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_dropdown_item_1line,
+            labels
+        )
+        binding.actvFont.setAdapter(adapter)
+        val currentLabel = OverlayFonts.labelFor(existing?.fontKey)
+        binding.actvFont.setText(currentLabel, false)
     }
 
     private fun buildSwatches(binding: DialogTextOverlayBinding, density: Float) {

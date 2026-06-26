@@ -56,6 +56,9 @@
     <string name="add_text">Add Text</string>
     <string name="add_gif">Add GIF</string>
     <string name="add_video">Add Video</string>
+    <string name="add_url">Add URL / Browser overlay</string>
+    <string name="url_overlay_hint">https://… (e.g. StreamElements overlay URL)</string>
+    <string name="url_overlay_invalid">Enter a valid URL</string>
     <string name="overlay_icon">Overlay icon</string>
     <string name="toggle_visibility">Toggle visibility</string>
     <string name="delete_overlay">Delete overlay</string>
@@ -71,6 +74,7 @@
     <string name="text_overlay_title">Text Overlay</string>
     <string name="text_content_label">Text</string>
     <string name="font_size_label">Font Size</string>
+    <string name="font_label">Font</string>
     <string name="color_label">Color</string>
     <string name="custom_hex_color_hint">Custom hex (#RRGGBB or #AARRGGBB)</string>
     <string name="custom_hex_color_invalid">Invalid hex color</string>

@@ -12,6 +12,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.streamforge.app.R
 import com.streamforge.app.databinding.BottomSheetOverlayManagerBinding
 import com.streamforge.app.overlay.OverlayItem
 import com.streamforge.app.overlay.OverlayStore
@@ -102,6 +103,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                         is OverlayItem.Text -> item.copy().also { it.visible = !item.visible }
                         is OverlayItem.Gif -> item.copy().also { it.visible = !item.visible }
                         is OverlayItem.Video -> item.copy().also { it.visible = !item.visible }
+                        is OverlayItem.Browser -> item.copy().also { it.visible = !item.visible }
                     }
                     overlayStore.updateOverlay(toggled)
                     loadOverlays()
@@ -147,6 +149,53 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         binding.btnAddText.setOnClickListener {
             showTextDialog(null)
         }
+        binding.btnAddUrl.setOnClickListener {
+            showUrlDialog()
+        }
+    }
+
+    /**
+     * Prompt for a web-overlay URL (e.g. a StreamElements browser source). The page is
+     * rendered live into the stream as a full-frame transparent layer.
+     */
+    private fun showUrlDialog() {
+        val ctx = requireContext()
+        val density = resources.displayMetrics.density
+        val pad = (20 * density).toInt()
+        val input = android.widget.EditText(ctx).apply {
+            hint = getString(R.string.url_overlay_hint)
+            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine(true)
+        }
+        val container = android.widget.FrameLayout(ctx).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setTitle(R.string.add_url)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val url = normalizeUrl(input.text?.toString()?.trim().orEmpty())
+                if (url.isNullOrEmpty()) {
+                    android.widget.Toast.makeText(ctx, R.string.url_overlay_invalid, android.widget.Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val overlay = OverlayItem.Browser(id = UUID.randomUUID().toString(), url = url)
+                lifecycleScope.launch {
+                    overlayStore.addOverlay(overlay)
+                    loadOverlays()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Accept bare hosts by defaulting to https; reject anything without a dot/host. */
+    private fun normalizeUrl(raw: String): String? {
+        if (raw.isEmpty()) return null
+        val withScheme = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "https://$raw"
+        val uri = try { Uri.parse(withScheme) } catch (_: Exception) { return null }
+        return if (uri.host.isNullOrBlank()) null else withScheme
     }
 
     private fun showTextDialog(existing: OverlayItem.Text?) {
@@ -220,6 +269,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         is OverlayItem.Text -> copy().also { it.scale = scale }
         is OverlayItem.Gif -> copy().also { it.scale = scale }
         is OverlayItem.Video -> copy().also { it.scale = scale }
+        is OverlayItem.Browser -> copy().also { it.scale = scale }
     }
 
     override fun onDestroyView() {

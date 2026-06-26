@@ -36,12 +36,28 @@ import java.io.ByteArrayInputStream
  */
 class OverlayRenderer(
     private val context: Context,
-    private val rtmpCamera: RtmpCamera2
+    private val rtmpCamera: RtmpCamera2,
+    // Window-capable context (an Activity) used to host browser-overlay Presentations.
+    // Defaults to [context] for callers that don't use browser overlays.
+    private val uiContext: Context = context
 ) {
     private val filters = mutableMapOf<String, BaseFilterRender>()
     private val bitmaps = mutableMapOf<String, Bitmap>()
     private val videoPlayers = mutableMapOf<String, VideoOverlayPlayer>()
+    private val browserSources = mutableMapOf<String, BrowserOverlaySource>()
     private val pendingLoads = mutableMapOf<String, Job>()
+
+    // Native content aspect ratio (width / height) per overlay, used to size the overlay
+    // box without distorting it. Populated as each overlay's content becomes known
+    // (bitmap decoded, text measured, gif bounds read, browser render size). Absent = use
+    // the stream aspect (i.e. no correction — the legacy behaviour).
+    private val contentAspect = mutableMapOf<String, Float>()
+
+    // Output stream dimensions, needed to convert a content aspect ratio into the
+    // independent width%/height% RootEncoder's setScale expects. Updated by the host
+    // whenever the configured resolution changes; defaults to a 16:9 frame.
+    private var streamWidth: Int = 1280
+    private var streamHeight: Int = 720
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -90,6 +106,17 @@ class OverlayRenderer(
      * invisible. Adds new items, updates existing ones, removes any that vanished
      * or became hidden.
      */
+    /**
+     * Tell the renderer the output resolution so it can size overlays without distorting
+     * them. Safe to call any time; takes effect on the next reconcile.
+     */
+    fun setStreamSize(width: Int, height: Int) {
+        if (width > 0 && height > 0) {
+            streamWidth = width
+            streamHeight = height
+        }
+    }
+
     fun applyOverlays(items: List<OverlayItem>) {
         lastItems = items
         verifyAttempts = 0
@@ -157,13 +184,13 @@ class OverlayRenderer(
         lastItems.forEach { item ->
             if (item !is OverlayItem.Text || !item.scroll || !item.visible) return@forEach
             val filter = filters[item.id] as? BaseObjectFilterRender ?: return@forEach
-            val sizePercent = 20f * item.scale
+            val widthPercent = 20f * item.scale
             var x = scrollPositions[item.id] ?: 100f
             x -= SCROLL_SPEED_PERCENT_PER_FRAME
             // Wrap once the whole overlay has slid off the left edge.
-            if (x <= -sizePercent) x = 100f
+            if (x <= -widthPercent) x = 100f
             scrollPositions[item.id] = x
-            val topLeftY = (item.y * 100f) - (sizePercent / 2f)
+            val topLeftY = (item.y * 100f) - (heightPercentFor(item, widthPercent) / 2f)
             filter.setPosition(x, topLeftY)
         }
     }
@@ -183,7 +210,7 @@ class OverlayRenderer(
             return
         }
         if (item is OverlayItem.Text && filter is TextObjectFilterRender) {
-            filter.setText(item.text, item.fontSizeSp, item.colorArgb)
+            applyText(filter, item)
         }
         applyTransform(filter, item)
     }
@@ -194,6 +221,7 @@ class OverlayRenderer(
             is OverlayItem.Video -> attachFilter(item, buildVideoFilter(item))
             is OverlayItem.Image -> loadAndAttachImage(item)
             is OverlayItem.Gif -> loadAndAttachGif(item)
+            is OverlayItem.Browser -> attachFilter(item, buildBrowserFilter(item))
         }
     }
 
@@ -207,6 +235,7 @@ class OverlayRenderer(
         val cachedBitmap = bitmaps[item.id]
         if (cachedBitmap != null && !cachedBitmap.isRecycled) {
             android.util.Log.d("OverlayRenderer", "Reusing cached bitmap for ${item.id}")
+            if (cachedBitmap.height > 0) contentAspect[item.id] = cachedBitmap.width.toFloat() / cachedBitmap.height
             val filter = ImageObjectFilterRender().apply { setImage(cachedBitmap) }
             attachFilter(item, filter)
             return
@@ -231,6 +260,7 @@ class OverlayRenderer(
                 return@launch
             }
             bitmaps[item.id] = bitmap
+            if (bitmap.height > 0) contentAspect[item.id] = bitmap.width.toFloat() / bitmap.height
             android.util.Log.d("OverlayRenderer", "Bitmap loaded for ${item.id}, creating filter")
             val filter = ImageObjectFilterRender().apply { setImage(bitmap) }
             attachFilter(item, filter)
@@ -245,6 +275,7 @@ class OverlayRenderer(
         // If GIF bytes are already cached, reuse them immediately
         val cachedBytes = gifBytes[item.id]
         if (cachedBytes != null) {
+            recordGifAspect(item.id, cachedBytes)
             val filter = try {
                 GifObjectFilterRender().apply { setGif(ByteArrayInputStream(cachedBytes)) }
             } catch (_: Exception) {
@@ -265,6 +296,7 @@ class OverlayRenderer(
             pendingLoads.remove(item.id)
             if (bytes == null || !item.visible || filters.containsKey(item.id)) return@launch
             gifBytes[item.id] = bytes
+            recordGifAspect(item.id, bytes)
             val filter = try {
                 GifObjectFilterRender().apply { setGif(ByteArrayInputStream(bytes)) }
             } catch (_: Exception) {
@@ -304,6 +336,7 @@ class OverlayRenderer(
             rtmpCamera.glInterface.removeFilter(filter)
         } catch (_: Exception) { }
         videoPlayers.remove(id)?.release()
+        browserSources.remove(id)?.release()
         // Don't recycle bitmaps or clear gif bytes - keep them cached for re-application
         // bitmaps.remove(item.id)?.recycle()
         // gifBytes.remove(item.id)
@@ -331,6 +364,8 @@ class OverlayRenderer(
         }
         videoPlayers.values.forEach { it.release() }
         videoPlayers.clear()
+        browserSources.values.forEach { it.release() }
+        browserSources.clear()
         texturesHealed.clear()
     }
 
@@ -384,6 +419,7 @@ class OverlayRenderer(
         removeOverlay(id)
         bitmaps.remove(id)?.recycle()
         gifBytes.remove(id)
+        contentAspect.remove(id)
     }
 
     /**
@@ -402,43 +438,99 @@ class OverlayRenderer(
                 } catch (_: Exception) { }
             }
             videoPlayers.remove(id)?.release()
+            browserSources.remove(id)?.release()
         }
         bitmaps.values.forEach { it.recycle() }
         bitmaps.clear()
         gifBytes.clear()
+        contentAspect.clear()
         texturesHealed.clear()
         scope.cancel()
     }
 
     private fun applyTransform(filter: BaseFilterRender, item: OverlayItem) {
         if (filter !is BaseObjectFilterRender) return
-        val baseSize = 20f
-        val sizePercent = baseSize * item.scale
-        val topLeftY = (item.y * 100f) - (sizePercent / 2f)
+        // Width as a percent of the stream width: scale=1.0 → 20% wide.
+        val widthPercent = 20f * item.scale
+        // Height chosen so the content keeps its real aspect ratio on a non-square frame.
+        // setScale's two args are independent percentages of stream width/height, so equal
+        // values squash anything whose aspect != the stream's. heightPercent corrects that.
+        val heightPercent = heightPercentFor(item, widthPercent)
+        val topLeftY = (item.y * 100f) - (heightPercent / 2f)
         if (item is OverlayItem.Text && item.scroll) {
             // The ticker loop owns the horizontal position; seed it (off the right edge)
             // and let tickScroll drive it from here so the two don't fight.
             val x = scrollPositions.getOrPut(item.id) { 100f }
             filter.setPosition(x, topLeftY)
         } else {
-            val topLeftX = (item.x * 100f) - (sizePercent / 2f)
+            val topLeftX = (item.x * 100f) - (widthPercent / 2f)
             filter.setPosition(topLeftX, topLeftY)
             scrollPositions.remove(item.id)
         }
-        filter.setScale(sizePercent, sizePercent)
+        filter.setScale(widthPercent, heightPercent)
         filter.setRotation(item.rotation.toInt())
+    }
+
+    /**
+     * Height percent (of stream height) that pairs with [widthPercent] (of stream width)
+     * to render the overlay's content undistorted. Derivation: rendered pixel box is
+     * (widthPercent% · streamW) × (heightPercent% · streamH); for that to match the content
+     * aspect (w/h) we need heightPercent = widthPercent · (streamW/streamH) / (w/h).
+     * Falls back to widthPercent (the legacy square-percent behaviour) if the content
+     * aspect isn't known yet.
+     */
+    private fun heightPercentFor(item: OverlayItem, widthPercent: Float): Float {
+        val aspect = contentAspect[item.id] ?: return widthPercent
+        if (aspect <= 0f) return widthPercent
+        val streamAspect = streamWidth.toFloat() / streamHeight.toFloat()
+        return widthPercent * streamAspect / aspect
     }
 
     private fun buildTextFilter(item: OverlayItem.Text): TextObjectFilterRender {
         val filter = TextObjectFilterRender()
-        filter.setText(item.text, item.fontSizeSp, item.colorArgb)
+        applyText(filter, item)
         return filter
+    }
+
+    /**
+     * Render the overlay's text into the filter at high resolution with the chosen font.
+     * The library builds the text bitmap at the given pixel size, then the GPU scales it
+     * to fit our overlay box — so we render well above on-screen size to stay crisp
+     * (this is what fixes blurry text, especially complex Devanagari/Marathi glyphs).
+     * Also records the text's true aspect ratio so the box isn't stretched.
+     */
+    private fun applyText(filter: TextObjectFilterRender, item: OverlayItem.Text) {
+        val density = context.resources.displayMetrics.density
+        val renderPx = (item.fontSizeSp * density * TEXT_QUALITY_MULTIPLIER)
+            .coerceIn(MIN_TEXT_RENDER_PX, MAX_TEXT_RENDER_PX)
+        filter.setText(item.text, renderPx, item.colorArgb, OverlayFonts.typefaceFor(item.fontKey))
+        contentAspect[item.id] = OverlayFonts.textAspect(item.text, item.fontKey)
     }
 
     private fun buildVideoFilter(item: OverlayItem.Video): BaseObjectFilterRender {
         val player = VideoOverlayPlayer(context, Uri.parse(item.uri), item.loop)
         videoPlayers[item.id] = player
         return player.filter
+    }
+
+    private fun buildBrowserFilter(item: OverlayItem.Browser): BaseObjectFilterRender {
+        val source = BrowserOverlaySource(uiContext, item.url, item.renderWidth, item.renderHeight)
+        browserSources[item.id] = source
+        if (item.renderHeight > 0) {
+            contentAspect[item.id] = item.renderWidth.toFloat() / item.renderHeight
+        }
+        return source.filter
+    }
+
+    /** Read just the first GIF frame's bounds to record its aspect ratio (cheap). */
+    private fun recordGifAspect(id: String, bytes: ByteArray) {
+        try {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+            if (opts.outWidth > 0 && opts.outHeight > 0) {
+                contentAspect[id] = opts.outWidth.toFloat() / opts.outHeight
+            }
+        } catch (_: Exception) { }
     }
 
     /**
@@ -471,6 +563,13 @@ class OverlayRenderer(
 
     private companion object {
         const val MAX_OVERLAY_EDGE_PX = 1024
+
+        // Text overlays are rendered to a bitmap at this multiple of their on-screen point
+        // size (× display density), then GPU-scaled into the overlay box. Rendering well
+        // above display size keeps glyphs sharp — Devanagari/Marathi conjuncts especially.
+        const val TEXT_QUALITY_MULTIPLIER = 2.5f
+        const val MIN_TEXT_RENDER_PX = 72f
+        const val MAX_TEXT_RENDER_PX = 320f
 
         // Self-heal sweep: re-reconcile at t = 300ms and 600ms after each change.
         // Bounded (no infinite loop); reconcile is idempotent for already-attached
