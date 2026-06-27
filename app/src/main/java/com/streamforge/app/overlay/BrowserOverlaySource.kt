@@ -61,7 +61,11 @@ class BrowserOverlaySource(
             surface = s
 
             val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-            val densityDpi = context.resources.displayMetrics.densityDpi
+            // Use mdpi (1 CSS px == 1 device px) so a [renderWidth]-px WebView lays the page
+            // out at a [renderWidth]-CSS-px viewport. StreamElements overlays are authored on a
+            // fixed 1920×1080 canvas, so rendering at 1920×1080 @ 160dpi reproduces the
+            // dashboard 1:1 instead of re-scaling everything by the phone's screen density.
+            val densityDpi = android.util.DisplayMetrics.DENSITY_DEFAULT
             val vd = dm.createVirtualDisplay(
                 "browser-overlay-$url",
                 renderWidth,
@@ -115,6 +119,13 @@ class BrowserOverlaySource(
         @SuppressLint("SetJavaScriptEnabled")
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
+            // The Presentation is a Dialog: its window paints an opaque (white) background by
+            // default, which would fill the whole video frame. Make the window — and its dim
+            // layer — fully transparent so only the web page's own pixels composite onto video.
+            window?.apply {
+                setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+                clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            }
             val wv = WebView(context)
             wv.layoutParams = ViewGroup.LayoutParams(renderWidth, renderHeight)
             // Transparent so only the overlay's own pixels (alerts/text) composite onto video.
@@ -123,8 +134,11 @@ class BrowserOverlaySource(
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 mediaPlaybackRequiresUserGesture = false
-                loadWithOverviewMode = true
-                useWideViewPort = true
+                // Render the page at its authored size on our fixed-size canvas — do NOT
+                // overview-fit or apply a wide viewport, which would re-scale the layout and
+                // make element sizes diverge from the StreamElements dashboard.
+                loadWithOverviewMode = false
+                useWideViewPort = false
                 cacheMode = WebSettings.LOAD_DEFAULT
             }
             wv.webViewClient = WebViewClient()

@@ -450,6 +450,15 @@ class OverlayRenderer(
 
     private fun applyTransform(filter: BaseFilterRender, item: OverlayItem) {
         if (filter !is BaseObjectFilterRender) return
+        // Browser/URL overlays are locked full-frame (like an OBS browser source that fills
+        // the canvas): always cover the whole frame so the page's own CSS positioning — not
+        // user dragging — places its widgets. Ignore x/y/scale/rotation entirely.
+        if (item is OverlayItem.Browser) {
+            filter.setPosition(0f, 0f)
+            filter.setScale(100f, 100f)
+            filter.setRotation(0)
+            return
+        }
         // Width as a percent of the stream width: scale=1.0 → 20% wide.
         val widthPercent = 20f * item.scale
         // Height chosen so the content keeps its real aspect ratio on a non-square frame.

@@ -86,6 +86,12 @@ class OverlayListAdapter(
         }
 
         private fun bindSizeControls(item: OverlayItem) {
+            // Browser/URL overlays are locked full-frame, so they expose no size control.
+            if (item is OverlayItem.Browser) {
+                binding.sizeControls.visibility = ViewGroup.GONE
+                return
+            }
+            binding.sizeControls.visibility = ViewGroup.VISIBLE
             val seek = binding.seekSize
             // Detach any recycled listener before re-seeding progress so the programmatic
             // set can't be mistaken for user input on this rebound row.

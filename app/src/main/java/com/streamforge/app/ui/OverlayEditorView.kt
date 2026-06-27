@@ -156,10 +156,14 @@ class OverlayEditorView @JvmOverloads constructor(
                     if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
                 }
                 is OverlayItem.Browser -> {
-                    val rect = RectF(-60f, -34f, 60f, 34f)
-                    if (showPlaceholders) canvas.drawRect(rect, browserPaint)
-                    canvas.drawRect(rect, outlinePaint)
-                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
+                    // Browser/URL overlays are locked full-frame and not user-editable, so
+                    // they draw no gesture box — the GL pipeline shows the real web content.
+                    // Placeholder only (test activity without a GL pipeline).
+                    if (showPlaceholders) {
+                        val rect = RectF(-60f, -34f, 60f, 34f)
+                        canvas.drawRect(rect, browserPaint)
+                        canvas.drawRect(rect, outlinePaint)
+                    }
                 }
             }
 
@@ -247,8 +251,11 @@ class OverlayEditorView @JvmOverloads constructor(
     }
 
     private fun selectItemAt(x: Float, y: Float) {
-        // Hit test from top of z-order, only visible items
-        val hitItem = items.sortedByDescending { it.zIndex }.filter { it.visible }.firstOrNull { item ->
+        // Hit test from top of z-order, only visible items. Browser overlays are locked
+        // full-frame and not user-movable, so they're excluded from selection/dragging.
+        val hitItem = items.sortedByDescending { it.zIndex }
+            .filter { it.visible && it !is OverlayItem.Browser }
+            .firstOrNull { item ->
             val screenX = item.x * width
             val screenY = item.y * height
             val distance = hypot(x - screenX, y - screenY)

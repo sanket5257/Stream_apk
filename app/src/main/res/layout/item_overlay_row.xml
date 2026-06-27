@@ -76,6 +76,7 @@
 
         <!-- Size control row: shrink button, slider, grow button -->
         <LinearLayout
+            android:id="@+id/sizeControls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"

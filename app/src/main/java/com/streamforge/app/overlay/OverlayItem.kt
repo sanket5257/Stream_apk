@@ -88,16 +88,16 @@ sealed class OverlayItem {
     /**
      * Browser / URL overlay. A live web page (e.g. a StreamElements alert or chat box URL)
      * is rendered off-screen in a WebView and composited into the stream. Browser overlays
-     * are typically full-frame transparent canvases, so [scale] defaults to 5.0 (= 100% of
-     * stream width with the renderer's 20%-base sizing) and the content keeps the
-     * [renderWidth]:[renderHeight] aspect.
+     * are full-frame transparent canvases locked to cover the whole frame — they are not
+     * user-movable/resizable. The render canvas defaults to StreamElements' native
+     * 1920×1080 so widget sizes/positions reproduce the dashboard 1:1.
      */
     @Serializable
     data class Browser(
         override val id: String,
         val url: String,
-        val renderWidth: Int = 1280,
-        val renderHeight: Int = 720,
+        val renderWidth: Int = 1920,
+        val renderHeight: Int = 1080,
         override var x: Float = 0.5f,
         override var y: Float = 0.5f,
         override var scale: Float = 5.0f,
