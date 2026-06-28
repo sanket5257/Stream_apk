@@ -16,10 +16,12 @@ import com.streamforge.app.stream.StreamState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -34,6 +36,16 @@ class StreamService : Service() {
         const val EXTRA_CONFIG = "extra_config"
         private const val TAG = "StreamService"
         private const val MAX_RETRY_COUNT = 3
+
+        // No-data watchdog tuning. "Live" from RootEncoder only means the RTMP handshake
+        // succeeded; these let us detect a session that connected but carries no media and
+        // recover it the way other streaming apps do — auto-reconnect.
+        private const val NO_DATA_GRACE_MS = 8000L      // let the encoder warm up first
+        private const val WATCHDOG_TICK_MS = 1000L
+        private const val NO_DATA_TIMEOUT_MS = 8000L    // no bytes this long => dead session
+        private const val RECONNECT_COOLDOWN_MS = 4000L // let YouTube release the key
+        private const val MIN_RECONNECT_MS = 3000L      // floor for backoff reconnects
+        private const val MAX_FORCED_RECONNECTS = 3     // give up after this many dead sessions
     }
 
     private val binder = StreamBinder()
@@ -44,6 +56,17 @@ class StreamService : Service() {
     private var backupExhausted = false
     private var currentConfig: StreamConfig? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+
+    // Tracked so we can cancel them on stop — otherwise a delayed reconnect can re-publish
+    // after the user stopped, or a watchdog can keep poking a session that's gone.
+    private var reconnectJob: Job? = null
+    private var watchdogJob: Job? = null
+    // Counts consecutive "connected but no media" sessions; reset only when real bytes flow.
+    private var forcedReconnects = 0
+    // True once we've decided to give up, so the state collector stops auto-retrying.
+    @Volatile private var terminating = false
+    // Ensures we only attach one state collector even if the activity rebinds repeatedly.
+    private var stateCollectorStarted = false
     
     private val _serviceState = MutableStateFlow<StreamState>(StreamState.Idle)
     val serviceState: StateFlow<StreamState> = _serviceState.asStateFlow()
@@ -88,10 +111,15 @@ class StreamService : Service() {
 
     private fun startStreaming(config: StreamConfig) {
         Log.d(TAG, "Starting streaming service")
+        // Clear any leftover work from a previous session so we start clean.
+        reconnectJob?.cancel(); reconnectJob = null
+        watchdogJob?.cancel(); watchdogJob = null
         currentConfig = config
         retryCount = 0
         usingBackup = false
         backupExhausted = false
+        forcedReconnects = 0
+        terminating = false
         
         // Acquire wake lock to keep CPU running
         acquireWakeLock()
@@ -131,6 +159,13 @@ class StreamService : Service() {
 
     private fun stopStreaming() {
         Log.d(TAG, "Stopping streaming service")
+        // Cancel pending reconnect/watchdog FIRST so they can't re-publish after the user stops.
+        reconnectJob?.cancel(); reconnectJob = null
+        watchdogJob?.cancel(); watchdogJob = null
+        retryCount = 0
+        usingBackup = false
+        backupExhausted = false
+        forcedReconnects = 0
         streamManager?.stopStream()
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -160,8 +195,12 @@ class StreamService : Service() {
 
     fun setStreamManager(manager: StreamManager) {
         this.streamManager = manager
-        
-        // Monitor stream state for auto-reconnect
+
+        // Attach the state collector exactly once. The activity can rebind multiple times
+        // (rotation, returning from the media picker); without this guard each rebind added
+        // another collector, multiplying the retry/reconnect logic.
+        if (stateCollectorStarted) return
+        stateCollectorStarted = true
         serviceScope.launch {
             manager.state.collect { state ->
                 _serviceState.value = state
@@ -171,6 +210,9 @@ class StreamService : Service() {
     }
 
     private fun handleStreamState(state: StreamState) {
+        // Once we've decided to give up, ignore further state churn so the terminal Failed
+        // isn't immediately re-retried by the logic below.
+        if (terminating) return
         when (state) {
             is StreamState.Failed -> {
                 val hasBackup = currentConfig?.backupRtmpUrl?.isNotBlank() == true
@@ -195,10 +237,75 @@ class StreamService : Service() {
             }
             is StreamState.Live -> {
                 retryCount = 0 // Reset on successful connection
+                startNoDataWatchdog()
             }
             else -> {
                 // Idle or Connecting - no action needed
             }
+        }
+    }
+
+    /**
+     * RootEncoder reports "Live" the moment the RTMP handshake/publish succeeds — even if the
+     * encoder feed never re-linked on a reused pipeline, or YouTube is dropping a stale-key
+     * session. Watch the real outbound bitrate; if no bytes leave for a few seconds, the
+     * session is dead, so do a clean stop → cooldown → restart (the auto-reconnect other apps
+     * rely on). NOTE: this catches a dead encoder/connection, but NOT a deleted/unbound
+     * YouTube broadcast — there the bytes are sent and read-then-discarded, so bitrate looks
+     * healthy. The only fix for that is to not delete the broadcast before reconnecting.
+     */
+    private fun startNoDataWatchdog() {
+        watchdogJob?.cancel()
+        val mgr = streamManager ?: return
+        watchdogJob = serviceScope.launch {
+            delay(NO_DATA_GRACE_MS)
+            var starvedMs = 0L
+            while (isActive) {
+                if (_serviceState.value !is StreamState.Live) return@launch
+                if (mgr.lastBitrateBps > 0) {
+                    starvedMs = 0L
+                    forcedReconnects = 0 // a healthy, media-carrying session — clear the counter
+                } else {
+                    starvedMs += WATCHDOG_TICK_MS
+                    if (starvedMs >= NO_DATA_TIMEOUT_MS) {
+                        handleNoMedia()
+                        return@launch
+                    }
+                }
+                delay(WATCHDOG_TICK_MS)
+            }
+        }
+    }
+
+    /** A connected-but-media-less session: clean-reconnect, or give up after too many. */
+    private fun handleNoMedia() {
+        val config = currentConfig ?: return
+        watchdogJob?.cancel(); watchdogJob = null
+        forcedReconnects++
+
+        if (forcedReconnects > MAX_FORCED_RECONNECTS) {
+            Log.e(TAG, "No media after $MAX_FORCED_RECONNECTS reconnects — giving up")
+            terminating = true
+            reconnectJob?.cancel(); reconnectJob = null
+            streamManager?.stopStream()
+            streamManager?.markFailed(
+                "YouTube isn't receiving the stream. Make sure live streaming is enabled and " +
+                "the previous broadcast has fully ended (don't delete it before reconnecting), " +
+                "then Go Live again."
+            )
+            releaseWakeLock()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+
+        Log.w(TAG, "No outbound media — clean reconnect $forcedReconnects/$MAX_FORCED_RECONNECTS")
+        reconnectJob?.cancel()
+        reconnectJob = serviceScope.launch {
+            streamManager?.stopStream()             // tear the dead session down fully
+            delay(RECONNECT_COOLDOWN_MS)            // let YouTube release the key
+            if (!isActive) return@launch
+            streamManager?.startStream(config, useBackup = usingBackup)
         }
     }
 
@@ -236,18 +343,27 @@ class StreamService : Service() {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.notify(NotificationHelper.NOTIFICATION_ID, notification)
         
-        // Exponential backoff: 1s, 4s, 9s
-        val delayMs = (retryCount * retryCount * 1000L)
-        
-        serviceScope.launch {
+        // Exponential backoff (1s, 4s, 9s), floored so we always give YouTube enough time to
+        // release the previous ingest session on this key before re-publishing.
+        val delayMs = (retryCount * retryCount * 1000L).coerceAtLeast(MIN_RECONNECT_MS)
+
+        reconnectJob?.cancel()
+        reconnectJob = serviceScope.launch {
             delay(delayMs)
+            if (!isActive) return@launch
             Log.d(TAG, "Attempting reconnect after ${delayMs}ms delay (backup=$usingBackup)")
+            // stopStream() first so the client is clean — the start guard would otherwise
+            // skip the reconnect if RootEncoder still thinks it's streaming.
+            streamManager?.stopStream()
             streamManager?.startStream(config, useBackup = usingBackup)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        reconnectJob?.cancel(); reconnectJob = null
+        watchdogJob?.cancel(); watchdogJob = null
+        serviceScope.cancel() // stop the state collector and any in-flight coroutines
         releaseWakeLock()
         Log.d(TAG, "StreamService destroyed")
     }

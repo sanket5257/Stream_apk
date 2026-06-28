@@ -62,6 +62,8 @@
     <string name="overlay_icon">Overlay icon</string>
     <string name="toggle_visibility">Toggle visibility</string>
     <string name="delete_overlay">Delete overlay</string>
+    <string name="overlay_move_up">Bring forward</string>
+    <string name="overlay_move_down">Send backward</string>
     <string name="text_scroll_label">Scroll horizontally (news ticker)</string>
     <string name="overlay_size_label">Size</string>
     <string name="overlay_size_decrease">Decrease size</string>

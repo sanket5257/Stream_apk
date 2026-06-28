@@ -20,6 +20,24 @@ class StreamManager(
     val state: StateFlow<StreamState> = _state.asStateFlow()
 
     /**
+     * Last outbound bitrate (bits/sec) reported by RootEncoder. Used by the service's
+     * no-data watchdog to tell a real, media-carrying session apart from a "connected but
+     * sending nothing" session (e.g. a re-prepared encoder whose GL feed didn't re-link).
+     * 0 means no media is leaving the device.
+     */
+    @Volatile
+    var lastBitrateBps: Long = 0L
+        private set
+
+    /** True while RootEncoder considers the RTMP client connected/publishing. */
+    fun isStreaming(): Boolean = rtmpCamera?.isStreaming == true
+
+    /** Force a Failed state (used by the watchdog when a session carries no media). */
+    fun markFailed(reason: String) {
+        _state.value = StreamState.Failed(reason)
+    }
+
+    /**
      * Phase 7: set by StreamActivity so external-mic selection works in the service too.
      */
     var audioManager: AudioManager? = null
@@ -40,6 +58,18 @@ class StreamManager(
      */
     fun startStream(config: StreamConfig, useBackup: Boolean = false) {
         val camera = rtmpCamera ?: return
+
+        // Guard against a double start — a stale reconnect racing a manual start, or the
+        // surface-loss recovery firing while we're already up. Re-publishing on an
+        // already-streaming client makes YouTube see a duplicate publish on the same key and
+        // silently drop media while the handshake still "succeeds" (the classic
+        // shows-live-but-no-video failure on the 2nd session).
+        if (camera.isStreaming) {
+            android.util.Log.w("StreamManager", "startStream ignored — already streaming")
+            return
+        }
+
+        lastBitrateBps = 0L
         _state.value = StreamState.Connecting
 
         val videoPrepared = camera.prepareVideo(
@@ -99,6 +129,7 @@ class StreamManager(
      * Stop the current stream.
      */
     fun stopStream() {
+        lastBitrateBps = 0L
         rtmpCamera?.stopStream()
         _state.value = StreamState.Idle
     }
@@ -117,7 +148,8 @@ class StreamManager(
     }
 
     override fun onNewBitrate(bitrate: Long) {
-        // Could be used to show current bitrate in UI
+        // Real outbound bitrate — the watchdog uses this to detect a media-less session.
+        lastBitrateBps = bitrate
     }
 
     override fun onDisconnect() {

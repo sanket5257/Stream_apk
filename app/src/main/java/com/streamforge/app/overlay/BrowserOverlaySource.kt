@@ -4,14 +4,18 @@ import android.annotation.SuppressLint
 import android.app.Presentation
 import android.content.Context
 import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.PorterDuff
 import android.graphics.SurfaceTexture
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.ImageReader
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Surface
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -21,18 +25,28 @@ import com.pedro.encoder.input.gl.render.filters.`object`.SurfaceFilterRender
 
 /**
  * Renders a live web page (e.g. a StreamElements browser-source URL) into RootEncoder's
- * GL pipeline so it composites onto the outgoing stream and the on-device preview.
+ * GL pipeline so it composites onto the outgoing stream and the on-device preview — with a
+ * TRANSPARENT background, so only the page's own pixels (alerts/ticker/logo) land on top of
+ * the camera and everything else shows the camera through.
  *
- * How it works: RootEncoder gives us a [SurfaceTexture] via [SurfaceFilterRender]. We wrap
- * it in a [Surface] and drive a [VirtualDisplay] onto it. A [Presentation] shown on that
- * virtual display hosts a [WebView] sized to the render resolution. Because the WebView
- * lives in a real (virtual) window, its JS timers, CSS animations and video play back
- * normally and are hardware-composited straight onto our Surface — no per-frame software
- * capture, no SYSTEM_ALERT_WINDOW permission.
+ * Why this isn't just a Presentation-on-a-VirtualDisplay pointed at our Surface:
+ * a VirtualDisplay always composites onto an OPAQUE BLACK background. The captured Surface
+ * therefore has alpha=1 everywhere, and RootEncoder's full-frame object filter then blends
+ * that solid black over the camera — blacking out the whole frame and leaving only the
+ * drawn widgets visible (the "URL overlay isn't capturing the full view" symptom).
  *
- * The [context] must be window-capable (an Activity); a Presentation cannot be shown from
- * a bare application context. This matches the app's model where the GL pipeline only
- * lives while StreamActivity is in the foreground.
+ * So we split the two jobs the VirtualDisplay used to do:
+ *  - LAYOUT/TICK: we still host the [WebView] in a [Presentation] on a 1920×1080
+ *    [VirtualDisplay] so the page lays out at StreamElements' native resolution and its JS
+ *    timers / CSS animations run against a real display vsync. That virtual display now
+ *    renders to a throwaway [ImageReader] whose frames we drain and discard.
+ *  - CAPTURE: we put the WebView in software layer mode and, on every frame, lock the
+ *    SurfaceFilterRender's [Surface], clear it to fully transparent, and draw the WebView
+ *    onto it ourselves. Because WE produce the buffer (CPU) and clear with PorterDuff.CLEAR,
+ *    the page's transparent regions stay alpha=0 and the camera shows through.
+ *
+ * The [context] must be window-capable (an Activity); a Presentation cannot be shown from a
+ * bare application context.
  */
 class BrowserOverlaySource(
     private val context: Context,
@@ -41,10 +55,13 @@ class BrowserOverlaySource(
     private val renderHeight: Int
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var surface: Surface? = null
+    private var captureSurface: Surface? = null
+    private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var presentation: WebPresentation? = null
+    private var webView: WebView? = null
     private var released = false
+    private var drawing = false
 
     val filter: SurfaceFilterRender = SurfaceFilterRender(
         SurfaceFilterRender.SurfaceReadyCallback { surfaceTexture ->
@@ -53,12 +70,30 @@ class BrowserOverlaySource(
         }
     )
 
+    // Continuously redraw the WebView onto the capture surface (~30fps) so animations,
+    // alerts and the ticker stay live. One repeating runnable covers the overlay's lifetime.
+    private val drawRunnable = object : Runnable {
+        override fun run() {
+            drawFrame()
+            if (drawing) mainHandler.postDelayed(this, FRAME_INTERVAL_MS)
+        }
+    }
+
     private fun onSurfaceReady(surfaceTexture: SurfaceTexture) {
-        if (released || virtualDisplay != null) return
+        if (released || captureSurface != null) return
         try {
             surfaceTexture.setDefaultBufferSize(renderWidth, renderHeight)
-            val s = Surface(surfaceTexture)
-            surface = s
+            captureSurface = Surface(surfaceTexture)
+
+            // Throwaway sink for the virtual display. We never show these frames; draining
+            // them keeps the display's buffer queue moving so the WebView keeps ticking.
+            val reader = ImageReader.newInstance(
+                renderWidth, renderHeight, PixelFormat.RGBA_8888, 2
+            )
+            reader.setOnImageAvailableListener({ r ->
+                try { r.acquireLatestImage()?.close() } catch (_: Exception) { }
+            }, mainHandler)
+            imageReader = reader
 
             val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
             // Use mdpi (1 CSS px == 1 device px) so a [renderWidth]-px WebView lays the page
@@ -71,18 +106,52 @@ class BrowserOverlaySource(
                 renderWidth,
                 renderHeight,
                 densityDpi,
-                s,
+                reader.surface,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
                     DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
             )
             virtualDisplay = vd
 
             val display = vd?.display ?: return
-            val p = WebPresentation(context, display, url, renderWidth, renderHeight)
+            val p = WebPresentation(context, display, url, renderWidth, renderHeight) { wv ->
+                // WebView is now created, laid out at native res and loading the page.
+                if (released) return@WebPresentation
+                webView = wv
+                if (!drawing) {
+                    drawing = true
+                    mainHandler.post(drawRunnable)
+                }
+            }
             presentation = p
             p.show()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start browser overlay for $url", e)
+        }
+    }
+
+    /**
+     * Capture one frame: lock the GL pipeline's surface, wipe it to fully transparent, and
+     * paint the current WebView state on top. The CLEAR is what gives the overlay real
+     * transparency — without it the buffer would keep whatever opaque content was there
+     * before and we'd be back to a black box over the camera.
+     */
+    private fun drawFrame() {
+        if (released) return
+        val wv = webView ?: return
+        val surface = captureSurface ?: return
+        if (!surface.isValid) return
+        val canvas = try {
+            surface.lockCanvas(null)
+        } catch (_: Exception) {
+            return
+        }
+        try {
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            wv.draw(canvas)
+        } catch (e: Exception) {
+            Log.e(TAG, "draw failed for $url", e)
+        } finally {
+            try { surface.unlockCanvasAndPost(canvas) } catch (_: Exception) { }
         }
     }
 
@@ -97,21 +166,32 @@ class BrowserOverlaySource(
 
     private fun doRelease() {
         released = true
+        drawing = false
+        mainHandler.removeCallbacks(drawRunnable)
+        webView = null
         try { presentation?.dismiss() } catch (_: Exception) { }
         presentation = null
         try { virtualDisplay?.release() } catch (_: Exception) { }
         virtualDisplay = null
-        surface?.release()
-        surface = null
+        try { imageReader?.close() } catch (_: Exception) { }
+        imageReader = null
+        captureSurface?.release()
+        captureSurface = null
     }
 
-    /** A minimal full-bleed transparent WebView window shown on the virtual display. */
+    /**
+     * A full-bleed transparent WebView window shown on the virtual display. It exists purely
+     * to give the WebView a real, correctly-sized window so it lays out at native resolution
+     * and its animations tick; the visible pixels are captured by the outer class drawing the
+     * WebView itself, not by this Presentation's own (opaque) compositing.
+     */
     private class WebPresentation(
         outerContext: Context,
         display: android.view.Display,
         private val url: String,
         private val renderWidth: Int,
-        private val renderHeight: Int
+        private val renderHeight: Int,
+        private val onReady: (WebView) -> Unit
     ) : Presentation(outerContext, display) {
 
         private var webView: WebView? = null
@@ -119,9 +199,6 @@ class BrowserOverlaySource(
         @SuppressLint("SetJavaScriptEnabled")
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
-            // The Presentation is a Dialog: its window paints an opaque (white) background by
-            // default, which would fill the whole video frame. Make the window — and its dim
-            // layer — fully transparent so only the web page's own pixels composite onto video.
             window?.apply {
                 setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
                 clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
@@ -130,6 +207,10 @@ class BrowserOverlaySource(
             wv.layoutParams = ViewGroup.LayoutParams(renderWidth, renderHeight)
             // Transparent so only the overlay's own pixels (alerts/text) composite onto video.
             wv.setBackgroundColor(Color.TRANSPARENT)
+            // Software layer is required so the outer class can draw the live page onto an
+            // arbitrary (CPU) Canvas with preserved alpha — a hardware-layer WebView draws
+            // blank to a software canvas, and the virtual display's own output is opaque.
+            wv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             wv.settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -148,6 +229,7 @@ class BrowserOverlaySource(
             webView = wv
             setContentView(wv)
             wv.loadUrl(url)
+            onReady(wv)
         }
 
         override fun onStop() {
@@ -165,5 +247,7 @@ class BrowserOverlaySource(
 
     companion object {
         private const val TAG = "BrowserOverlaySource"
+        // ~30fps redraw of the page onto the capture surface.
+        private const val FRAME_INTERVAL_MS = 33L
     }
 }

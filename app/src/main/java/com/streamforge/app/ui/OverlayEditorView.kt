@@ -13,7 +13,8 @@ import android.view.View
 import com.streamforge.app.overlay.OverlayItem
 import kotlin.math.abs
 import kotlin.math.atan2
-import kotlin.math.hypot
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Phase 3B: Custom view for editing overlay positions with gestures.
@@ -30,6 +31,13 @@ class OverlayEditorView @JvmOverloads constructor(
 
     private var selectionListener: ((String?) -> Unit)? = null
     private var itemChangeListener: ((OverlayItem) -> Unit)? = null
+
+    /**
+     * Supplies each overlay's content aspect ratio (width / height) so the gesture box matches
+     * the size RootEncoder actually renders it at. Without it (e.g. the test activity) every
+     * overlay falls back to a square box. Set by [StreamActivity] to query [OverlayRenderer].
+     */
+    var aspectProvider: ((String) -> Float?)? = null
 
     /**
      * When true (default), each item is drawn as a translucent colored rectangle —
@@ -113,62 +121,57 @@ class OverlayEditorView @JvmOverloads constructor(
         
         // Draw items sorted by zIndex, skip invisible items
         items.sortedBy { it.zIndex }.filter { it.visible }.forEach { item ->
+            // Browser/URL overlays are locked full-frame and not user-editable, so they draw
+            // no gesture box (the GL pipeline shows the real web content). The test activity,
+            // which has no GL pipeline, still draws a placeholder so the overlay is visible.
+            if (item is OverlayItem.Browser && !showPlaceholders) return@forEach
+
             canvas.save()
-            
-            // Calculate screen position
-            val screenX = item.x * width
-            val screenY = item.y * height
-            
-            // Apply transformations
-            canvas.translate(screenX, screenY)
+            canvas.translate(item.x * width, item.y * height)
             canvas.rotate(item.rotation)
-            canvas.scale(item.scale, item.scale)
-            
-            when (item) {
-                is OverlayItem.Image -> {
-                    val rect = RectF(-50f, -50f, 50f, 50f)
-                    if (showPlaceholders) canvas.drawRect(rect, imagePaint)
-                    canvas.drawRect(rect, outlinePaint)
-                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
+
+            // Box sized exactly like the rendered overlay so the outline/selection border the
+            // user sees matches what's on the stream — and what selectItemAt hit-tests.
+            val (halfW, halfH) = halfExtents(item)
+            val rect = RectF(-halfW, -halfH, halfW, halfH)
+
+            if (showPlaceholders) {
+                val fill = when (item) {
+                    is OverlayItem.Image -> imagePaint
+                    is OverlayItem.Text -> textPaint
+                    is OverlayItem.Gif -> gifPaint
+                    is OverlayItem.Video -> videoPaint
+                    is OverlayItem.Browser -> browserPaint
                 }
-                is OverlayItem.Text -> {
-                    val rect = RectF(-75f, -25f, 75f, 25f)
-                    if (showPlaceholders) {
-                        canvas.drawRect(rect, textPaint)
-                        textDrawPaint.textSize = item.fontSizeSp
-                        textDrawPaint.color = item.colorArgb
-                        val textWidth = textDrawPaint.measureText(item.text)
-                        canvas.drawText(item.text, -textWidth / 2, 10f, textDrawPaint)
-                    }
-                    canvas.drawRect(rect, outlinePaint)
-                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
+                canvas.drawRect(rect, fill)
+                if (item is OverlayItem.Text) {
+                    textDrawPaint.textSize = item.fontSizeSp
+                    textDrawPaint.color = item.colorArgb
+                    val textWidth = textDrawPaint.measureText(item.text)
+                    canvas.drawText(item.text, -textWidth / 2, 10f, textDrawPaint)
                 }
-                is OverlayItem.Gif -> {
-                    val rect = RectF(-50f, -50f, 50f, 50f)
-                    if (showPlaceholders) canvas.drawRect(rect, gifPaint)
-                    canvas.drawRect(rect, outlinePaint)
-                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
-                }
-                is OverlayItem.Video -> {
-                    val rect = RectF(-60f, -45f, 60f, 45f)
-                    if (showPlaceholders) canvas.drawRect(rect, videoPaint)
-                    canvas.drawRect(rect, outlinePaint)
-                    if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
-                }
-                is OverlayItem.Browser -> {
-                    // Browser/URL overlays are locked full-frame and not user-editable, so
-                    // they draw no gesture box — the GL pipeline shows the real web content.
-                    // Placeholder only (test activity without a GL pipeline).
-                    if (showPlaceholders) {
-                        val rect = RectF(-60f, -34f, 60f, 34f)
-                        canvas.drawRect(rect, browserPaint)
-                        canvas.drawRect(rect, outlinePaint)
-                    }
-                }
+            }
+
+            if (item !is OverlayItem.Browser) {
+                canvas.drawRect(rect, outlinePaint)
+                if (item.id == selectedId) canvas.drawRect(rect, selectionPaint)
             }
 
             canvas.restore()
         }
+    }
+
+    /**
+     * Half-width / half-height (view px) of an overlay's rendered box. Mirrors
+     * [com.streamforge.app.overlay.OverlayRenderer]: width = 20% × scale of the frame width,
+     * height derived from the content aspect ratio so the box isn't distorted. Falls back to a
+     * square when the aspect isn't known yet (or no provider, e.g. the test activity).
+     */
+    private fun halfExtents(item: OverlayItem): Pair<Float, Float> {
+        val boxW = BASE_WIDTH_FRACTION * item.scale * width
+        val aspect = (aspectProvider?.invoke(item.id) ?: 1f).coerceAtLeast(0.01f)
+        val boxH = boxW / aspect
+        return (boxW / 2f) to (boxH / 2f)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -251,20 +254,36 @@ class OverlayEditorView @JvmOverloads constructor(
     }
 
     private fun selectItemAt(x: Float, y: Float) {
-        // Hit test from top of z-order, only visible items. Browser overlays are locked
-        // full-frame and not user-movable, so they're excluded from selection/dragging.
+        // Hit test from the top of the z-order down, visible items only. Browser overlays are
+        // locked full-frame and not user-movable, so they're excluded. We test the touch
+        // against each overlay's actual rendered rectangle (rotated to match), not a uniform
+        // circle — so a wide/thin ticker no longer swallows touches meant for nearby overlays.
         val hitItem = items.sortedByDescending { it.zIndex }
             .filter { it.visible && it !is OverlayItem.Browser }
-            .firstOrNull { item ->
-            val screenX = item.x * width
-            val screenY = item.y * height
-            val distance = hypot(x - screenX, y - screenY)
-            distance < 100f * item.scale // Hit radius
-        }
-        
+            .firstOrNull { item -> hitTest(item, x, y) }
+
         selectedId = hitItem?.id
         selectionListener?.invoke(selectedId)
         invalidate()
+    }
+
+    /** True if (x, y) falls inside [item]'s rendered, rotated box (with a min touch target). */
+    private fun hitTest(item: OverlayItem, x: Float, y: Float): Boolean {
+        val (halfW, halfH) = halfExtents(item)
+        // Keep tiny overlays tappable by enforcing a minimum touch half-extent.
+        val hitHalfW = halfW.coerceAtLeast(MIN_TOUCH_HALF_PX)
+        val hitHalfH = halfH.coerceAtLeast(MIN_TOUCH_HALF_PX)
+
+        // Translate the touch into the overlay's local (un-rotated) frame around its center.
+        val dx = x - item.x * width
+        val dy = y - item.y * height
+        val theta = Math.toRadians(item.rotation.toDouble())
+        val cos = cos(theta).toFloat()
+        val sin = sin(theta).toFloat()
+        val localX = dx * cos + dy * sin
+        val localY = -dx * sin + dy * cos
+
+        return abs(localX) <= hitHalfW && abs(localY) <= hitHalfH
     }
 
     private fun moveSelectedItem(dx: Float, dy: Float) {
@@ -361,5 +380,13 @@ class OverlayEditorView @JvmOverloads constructor(
         // Minimum two-finger twist (degrees) before a pinch is treated as a rotation
         // rather than a pure resize. Keeps resizing from drifting on the z-axis.
         const val ROTATION_DEADZONE_DEG = 12f
+
+        // Overlay width as a fraction of the view width at scale 1.0. Mirrors
+        // OverlayRenderer's 20%-of-stream-width base so the editor box matches the stream.
+        const val BASE_WIDTH_FRACTION = 0.20f
+
+        // Smallest half-extent (px) a touch target may shrink to, so heavily-shrunk
+        // overlays stay tappable even when their drawn box is only a few pixels.
+        const val MIN_TOUCH_HALF_PX = 48f
     }
 }

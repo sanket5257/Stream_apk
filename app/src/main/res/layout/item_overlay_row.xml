@@ -53,6 +53,30 @@
                     android:layout_marginTop="4dp" />
             </LinearLayout>
 
+            <!-- Bring forward (raise z-order) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMoveUp"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="48dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:contentDescription="@string/overlay_move_up"
+                app:icon="@android:drawable/arrow_up_float"
+                app:iconTint="?attr/colorPrimary" />
+
+            <!-- Send backward (lower z-order) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMoveDown"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="48dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:contentDescription="@string/overlay_move_down"
+                app:icon="@android:drawable/arrow_down_float"
+                app:iconTint="?attr/colorPrimary" />
+
             <!-- Visibility Toggle -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnToggleVisibility"

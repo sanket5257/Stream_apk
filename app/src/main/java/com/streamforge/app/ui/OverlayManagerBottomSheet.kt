@@ -128,7 +128,9 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                     overlayStore.updateOverlay(item.withScale(scale))
                     loadOverlays()
                 }
-            }
+            },
+            onMoveUp = { item -> moveOverlay(item, towardFront = true) },
+            onMoveDown = { item -> moveOverlay(item, towardFront = false) }
         )
         binding.rvOverlays.layoutManager = LinearLayoutManager(requireContext())
         binding.rvOverlays.adapter = adapter
@@ -248,10 +250,36 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     private fun loadOverlays() {
         lifecycleScope.launch {
             val overlays = overlayStore.loadOverlays()
-            adapter.submitList(overlays)
+            // Show front-most (highest zIndex) first so the list reads top-to-bottom like the
+            // visible stack. The renderer/editor re-sort by zIndex themselves, so the order we
+            // hand them doesn't matter — only the list display order does.
+            adapter.submitList(overlays.sortedByDescending { it.zIndex })
             binding.tvEmptyState.isVisible = overlays.isEmpty()
             binding.rvOverlays.isVisible = overlays.isNotEmpty()
             onOverlaysChanged?.invoke(overlays)
+        }
+    }
+
+    /**
+     * Move an overlay one step in the stacking order and persist the whole list with
+     * normalized zIndex values. The displayed list is front-most first, so moving "toward the
+     * front" means a smaller list index / higher zIndex.
+     */
+    private fun moveOverlay(item: OverlayItem, towardFront: Boolean) {
+        lifecycleScope.launch {
+            val ordered = overlayStore.loadOverlays()
+                .sortedByDescending { it.zIndex }
+                .toMutableList()
+            val index = ordered.indexOfFirst { it.id == item.id }
+            if (index < 0) return@launch
+            val target = if (towardFront) index - 1 else index + 1
+            if (target < 0 || target >= ordered.size) return@launch
+            ordered[index] = ordered[target].also { ordered[target] = ordered[index] }
+            // Re-stamp zIndex so front-first display order == descending zIndex.
+            val last = ordered.size - 1
+            ordered.forEachIndexed { i, ov -> ov.zIndex = last - i }
+            overlayStore.saveOverlays(ordered)
+            loadOverlays()
         }
     }
 

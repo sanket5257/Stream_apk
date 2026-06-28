@@ -117,6 +117,13 @@ class OverlayRenderer(
         }
     }
 
+    /**
+     * Best-known content aspect ratio (width / height) for an overlay, or null if it hasn't
+     * been measured yet. The editor view uses this to draw and hit-test each overlay's box at
+     * the same size the GL pipeline renders it, so a touch lands on what the user sees.
+     */
+    fun aspectFor(id: String): Float? = contentAspect[id]
+
     fun applyOverlays(items: List<OverlayItem>) {
         lastItems = items
         verifyAttempts = 0

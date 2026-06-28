@@ -26,7 +26,11 @@ class OverlayListAdapter(
     private val onDelete: (OverlayItem) -> Unit,
     private val onEdit: (OverlayItem) -> Unit = {},
     private val onScaleChange: (OverlayItem, Float) -> Unit = { _, _ -> },
-    private val onScaleSettled: (OverlayItem, Float) -> Unit = { _, _ -> }
+    private val onScaleSettled: (OverlayItem, Float) -> Unit = { _, _ -> },
+    // Reorder the overlay's stacking (z-order). The list is shown front-most first, so
+    // "up" raises an overlay toward the front and "down" sends it toward the back.
+    private val onMoveUp: (OverlayItem) -> Unit = {},
+    private val onMoveDown: (OverlayItem) -> Unit = {}
 ) : ListAdapter<OverlayItem, OverlayListAdapter.OverlayViewHolder>(OverlayDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OverlayViewHolder {
@@ -81,6 +85,17 @@ class OverlayListAdapter(
             binding.root.setOnClickListener {
                 if (item is OverlayItem.Text) onEdit(item)
             }
+
+            // Reorder controls — greyed out at the ends of the list where there's nowhere to go.
+            val pos = adapterPosition
+            val canMoveUp = pos != RecyclerView.NO_POSITION && pos > 0
+            val canMoveDown = pos != RecyclerView.NO_POSITION && pos < itemCount - 1
+            binding.btnMoveUp.isEnabled = canMoveUp
+            binding.btnMoveDown.isEnabled = canMoveDown
+            binding.btnMoveUp.alpha = if (canMoveUp) 1f else 0.3f
+            binding.btnMoveDown.alpha = if (canMoveDown) 1f else 0.3f
+            binding.btnMoveUp.setOnClickListener { onMoveUp(item) }
+            binding.btnMoveDown.setOnClickListener { onMoveDown(item) }
 
             bindSizeControls(item)
         }

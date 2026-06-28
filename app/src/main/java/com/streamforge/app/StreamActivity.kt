@@ -458,6 +458,9 @@ class StreamActivity : AppCompatActivity() {
     private fun setupOverlayEditor() {
         // Real preview underneath — only show selection/outline, not filled placeholders.
         binding.overlayEditor.showPlaceholders = false
+        // Let the editor size its gesture boxes exactly like the GL pipeline renders each
+        // overlay, so a touch selects what the user actually sees (esp. wide/thin tickers).
+        binding.overlayEditor.aspectProvider = { id -> overlayRenderer?.aspectFor(id) }
         binding.overlayEditor.setItemChangeListener { item ->
             // Live-update path: a drag / pinch / rotate gesture finished a frame.
             // GL transform update is cheap — apply immediately.
