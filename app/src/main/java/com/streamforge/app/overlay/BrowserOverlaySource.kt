@@ -147,6 +147,18 @@ class BrowserOverlaySource(
         }
         try {
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            // The canvas is sized to whatever buffer the GL pipeline allocated for this
+            // SurfaceTexture, which is NOT guaranteed to equal renderWidth/renderHeight —
+            // setDefaultBufferSize doesn't reliably stick once SurfaceFilterRender owns the
+            // texture. The WebView is laid out at renderWidth×renderHeight, so if we drew it
+            // 1:1 onto a larger canvas the page would sit in the top-left corner and the rest
+            // of the frame would stay empty (the "URL overlay isn't full screen" symptom).
+            // Scale the draw so the page always fills the actual capture buffer.
+            val cw = canvas.width
+            val ch = canvas.height
+            if (cw > 0 && ch > 0 && (cw != renderWidth || ch != renderHeight)) {
+                canvas.scale(cw.toFloat() / renderWidth, ch.toFloat() / renderHeight)
+            }
             wv.draw(canvas)
         } catch (e: Exception) {
             Log.e(TAG, "draw failed for $url", e)

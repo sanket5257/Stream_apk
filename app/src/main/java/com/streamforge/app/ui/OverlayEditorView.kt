@@ -12,7 +12,6 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import com.streamforge.app.overlay.OverlayItem
 import kotlin.math.abs
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -103,18 +102,6 @@ class OverlayEditorView @JvmOverloads constructor(
     private var lastTouchX = 0f
     private var lastTouchY = 0f
     private var activePointerId = MotionEvent.INVALID_POINTER_ID
-    
-    // Rotation detection
-    private var initialAngle = 0f
-    private var currentAngle = 0f
-    private var isRotating = false
-
-    // A two-finger pinch (resize) inevitably wobbles the finger-to-finger angle a few
-    // degrees, which previously leaked into rotation — the overlay appeared to spin /
-    // tilt on its z-axis while the user only meant to change its size. Ignore rotation
-    // until the twist deliberately exceeds this dead-zone, then re-baseline so there's
-    // no jump when real rotation engages.
-    private var rotationActivated = false
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -190,13 +177,9 @@ class OverlayEditorView @JvmOverloads constructor(
             }
             
             MotionEvent.ACTION_POINTER_DOWN -> {
-                if (event.pointerCount == 2) {
-                    // Start rotation detection
-                    isRotating = true
-                    rotationActivated = false
-                    initialAngle = getAngle(event)
-                    currentAngle = getSelectedItem()?.rotation ?: 0f
-                }
+                // Rotation is intentionally disabled: overlays transform in 2D only (move +
+                // scale). A second finger drives pinch-to-scale via scaleDetector, never a
+                // z-axis twist.
             }
             
             MotionEvent.ACTION_MOVE -> {
@@ -215,38 +198,20 @@ class OverlayEditorView @JvmOverloads constructor(
                     
                     lastTouchX = x
                     lastTouchY = y
-                } else if (event.pointerCount == 2 && isRotating) {
-                    // Two finger rotation — gated behind a dead-zone so a pure pinch to
-                    // resize doesn't accidentally rotate the overlay on its z-axis.
-                    val angle = getAngle(event)
-                    if (!rotationActivated) {
-                        if (abs(angle - initialAngle) >= ROTATION_DEADZONE_DEG) {
-                            // Deliberate twist detected — re-baseline from here so rotation
-                            // starts smoothly instead of jumping by the dead-zone amount.
-                            rotationActivated = true
-                            initialAngle = angle
-                            currentAngle = getSelectedItem()?.rotation ?: 0f
-                        }
-                    }
-                    if (rotationActivated) {
-                        rotateSelectedItem(currentAngle + (angle - initialAngle))
-                    }
                 }
-                
+                // Two-finger gestures only scale (handled by scaleDetector); rotation is
+                // disabled so overlays stay axis-aligned (2D move + scale only).
+
                 invalidate()
                 return true
             }
             
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 activePointerId = MotionEvent.INVALID_POINTER_ID
-                isRotating = false
-                rotationActivated = false
             }
 
             MotionEvent.ACTION_CANCEL -> {
                 activePointerId = MotionEvent.INVALID_POINTER_ID
-                isRotating = false
-                rotationActivated = false
             }
         }
         
@@ -304,22 +269,8 @@ class OverlayEditorView @JvmOverloads constructor(
         invalidate()
     }
 
-    private fun rotateSelectedItem(rotation: Float) {
-        val item = getSelectedItem() ?: return
-        
-        item.rotation = rotation % 360f
-        
-        itemChangeListener?.invoke(item)
-    }
-
     private fun getSelectedItem(): OverlayItem? {
         return items.find { it.id == selectedId }
-    }
-
-    private fun getAngle(event: MotionEvent): Float {
-        val dx = event.getX(1) - event.getX(0)
-        val dy = event.getY(1) - event.getY(0)
-        return Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
     }
 
     // Public API
@@ -377,10 +328,6 @@ class OverlayEditorView @JvmOverloads constructor(
     }
 
     private companion object {
-        // Minimum two-finger twist (degrees) before a pinch is treated as a rotation
-        // rather than a pure resize. Keeps resizing from drifting on the z-axis.
-        const val ROTATION_DEADZONE_DEG = 12f
-
         // Overlay width as a fraction of the view width at scale 1.0. Mirrors
         // OverlayRenderer's 20%-of-stream-width base so the editor box matches the stream.
         const val BASE_WIDTH_FRACTION = 0.20f
