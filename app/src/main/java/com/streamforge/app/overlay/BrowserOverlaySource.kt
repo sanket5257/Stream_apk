@@ -62,6 +62,7 @@ class BrowserOverlaySource(
     private var webView: WebView? = null
     private var released = false
     private var drawing = false
+    private var loggedSizes = false
 
     val filter: SurfaceFilterRender = SurfaceFilterRender(
         SurfaceFilterRender.SurfaceReadyCallback { surfaceTexture ->
@@ -146,16 +147,29 @@ class BrowserOverlaySource(
             return
         }
         try {
-            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-            // The canvas is sized to whatever buffer the GL pipeline allocated for this
-            // SurfaceTexture, which is NOT guaranteed to equal renderWidth/renderHeight —
-            // setDefaultBufferSize doesn't reliably stick once SurfaceFilterRender owns the
-            // texture. The WebView is laid out at renderWidth×renderHeight, so if we drew it
-            // 1:1 onto a larger canvas the page would sit in the top-left corner and the rest
-            // of the frame would stay empty (the "URL overlay isn't full screen" symptom).
-            // Scale the draw so the page always fills the actual capture buffer.
+            // The page lands in the top-left corner / doesn't fill the frame when two sizes
+            // disagree and we draw 1:1:
+            //  1. The WebView's laid-out size (wv.draw paints only that area). The Presentation
+            //     doesn't reliably lay it out at renderWidth×renderHeight, so force it here.
+            //  2. The capture canvas's size — lockCanvas returns whatever buffer the GL
+            //     pipeline allocated for this SurfaceTexture (setDefaultBufferSize doesn't
+            //     reliably stick once SurfaceFilterRender owns the texture).
+            // Force the WebView to exactly renderWidth×renderHeight, then scale the canvas so
+            // that area fills the actual buffer — covering the whole frame regardless of either.
+            if (wv.width != renderWidth || wv.height != renderHeight) {
+                wv.measure(
+                    View.MeasureSpec.makeMeasureSpec(renderWidth, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(renderHeight, View.MeasureSpec.EXACTLY)
+                )
+                wv.layout(0, 0, renderWidth, renderHeight)
+            }
             val cw = canvas.width
             val ch = canvas.height
+            if (!loggedSizes) {
+                loggedSizes = true
+                Log.d(TAG, "drawFrame canvas=${cw}x${ch} webview=${wv.width}x${wv.height} render=${renderWidth}x${renderHeight}")
+            }
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
             if (cw > 0 && ch > 0 && (cw != renderWidth || ch != renderHeight)) {
                 canvas.scale(cw.toFloat() / renderWidth, ch.toFloat() / renderHeight)
             }

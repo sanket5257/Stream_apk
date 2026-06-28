@@ -98,50 +98,101 @@
                 app:iconTint="?attr/colorError" />
         </LinearLayout>
 
-        <!-- Size control row: shrink button, slider, grow button -->
+        <!-- Size controls: independent Width and Height rows -->
         <LinearLayout
             android:id="@+id/sizeControls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
+            android:orientation="vertical"
             android:layout_marginTop="4dp">
 
-            <TextView
-                android:layout_width="wrap_content"
+            <!-- Width row -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/overlay_size_label"
-                android:textSize="12sp"
-                android:textColor="?android:textColorSecondary" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSizeDown"
-                style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:contentDescription="@string/overlay_size_decrease"
-                app:icon="@android:drawable/ic_input_delete"
-                app:iconTint="?attr/colorPrimary" />
+                <TextView
+                    android:layout_width="48dp"
+                    android:layout_height="wrap_content"
+                    android:text="@string/overlay_width_label"
+                    android:textSize="12sp"
+                    android:textColor="?android:textColorSecondary" />
 
-            <SeekBar
-                android:id="@+id/seekSize"
-                android:layout_width="0dp"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnWidthDown"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:contentDescription="@string/overlay_width_decrease"
+                    app:icon="@android:drawable/ic_input_delete"
+                    app:iconTint="?attr/colorPrimary" />
+
+                <SeekBar
+                    android:id="@+id/seekWidth"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="100" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnWidthUp"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:contentDescription="@string/overlay_width_increase"
+                    app:icon="@android:drawable/ic_input_add"
+                    app:iconTint="?attr/colorPrimary" />
+            </LinearLayout>
+
+            <!-- Height row -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:max="100" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSizeUp"
-                style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:contentDescription="@string/overlay_size_increase"
-                app:icon="@android:drawable/ic_input_add"
-                app:iconTint="?attr/colorPrimary" />
+                <TextView
+                    android:layout_width="48dp"
+                    android:layout_height="wrap_content"
+                    android:text="@string/overlay_height_label"
+                    android:textSize="12sp"
+                    android:textColor="?android:textColorSecondary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnHeightDown"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:contentDescription="@string/overlay_height_decrease"
+                    app:icon="@android:drawable/ic_input_delete"
+                    app:iconTint="?attr/colorPrimary" />
+
+                <SeekBar
+                    android:id="@+id/seekHeight"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="100" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnHeightUp"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:contentDescription="@string/overlay_height_increase"
+                    app:icon="@android:drawable/ic_input_add"
+                    app:iconTint="?attr/colorPrimary" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -17,9 +17,10 @@ import kotlin.math.roundToInt
  * Phase 4B + 5B: RecyclerView adapter for the overlay list.
  * Shows row controls (visibility / delete) and routes taps to onEdit for text overlays.
  *
- * Each row also carries a size slider (+ step buttons) so overlays can be resized without
- * the on-preview pinch gesture. [onScaleChange] fires continuously for live preview;
- * [onScaleSettled] fires once when the user lets go, for persistence.
+ * Each row carries independent Width and Height sliders (+ step buttons) so overlays can be
+ * resized without the on-preview pinch gesture. [onScaleChange]/[onHeightScaleChange] fire
+ * continuously for live preview; [onScaleSettled]/[onHeightScaleSettled] fire once when the
+ * user lets go, for persistence.
  */
 class OverlayListAdapter(
     private val onVisibilityToggle: (OverlayItem) -> Unit,
@@ -27,6 +28,8 @@ class OverlayListAdapter(
     private val onEdit: (OverlayItem) -> Unit = {},
     private val onScaleChange: (OverlayItem, Float) -> Unit = { _, _ -> },
     private val onScaleSettled: (OverlayItem, Float) -> Unit = { _, _ -> },
+    private val onHeightScaleChange: (OverlayItem, Float) -> Unit = { _, _ -> },
+    private val onHeightScaleSettled: (OverlayItem, Float) -> Unit = { _, _ -> },
     // Reorder the overlay's stacking (z-order). The list is shown front-most first, so
     // "up" raises an overlay toward the front and "down" sends it toward the back.
     private val onMoveUp: (OverlayItem) -> Unit = {},
@@ -71,7 +74,7 @@ class OverlayListAdapter(
                     binding.ivOverlayIcon.setImageResource(android.R.drawable.ic_menu_compass)
                 }
             }
-            bindDetails(item, item.scale)
+            bindDetails(item, item.scale, item.heightScale)
 
             val visibilityIcon = if (item.visible) {
                 android.R.drawable.ic_menu_view
@@ -101,58 +104,80 @@ class OverlayListAdapter(
         }
 
         private fun bindSizeControls(item: OverlayItem) {
-            // Browser/URL overlays are locked full-frame, so they expose no size control.
-            if (item is OverlayItem.Browser) {
-                binding.sizeControls.visibility = ViewGroup.GONE
-                return
-            }
+            // All overlays (Image/Text/Gif/Video/Browser) are independently resizable.
             binding.sizeControls.visibility = ViewGroup.VISIBLE
-            val seek = binding.seekSize
+
+            // --- Width slider (drives item.scale) ---
+            val seekW = binding.seekWidth
             // Detach any recycled listener before re-seeding progress so the programmatic
             // set can't be mistaken for user input on this rebound row.
-            seek.setOnSeekBarChangeListener(null)
-            seek.progress = scaleToProgress(item.scale)
-
-            seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            seekW.setOnSeekBarChangeListener(null)
+            seekW.progress = scaleToProgress(item.scale)
+            seekW.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
                     if (!fromUser) return
                     val scale = progressToScale(progress)
-                    bindDetails(item, scale)
+                    bindDetails(item, scale, progressToScale(binding.seekHeight.progress))
                     onScaleChange(item, scale)
                 }
-
                 override fun onStartTrackingTouch(sb: SeekBar) {}
-
                 override fun onStopTrackingTouch(sb: SeekBar) {
                     onScaleSettled(item, progressToScale(sb.progress))
                 }
             })
+            binding.btnWidthDown.setOnClickListener { stepWidth(item, -SIZE_STEP) }
+            binding.btnWidthUp.setOnClickListener { stepWidth(item, SIZE_STEP) }
 
-            binding.btnSizeDown.setOnClickListener { stepSize(item, -SIZE_STEP) }
-            binding.btnSizeUp.setOnClickListener { stepSize(item, SIZE_STEP) }
+            // --- Height slider (drives item.heightScale) ---
+            val seekH = binding.seekHeight
+            seekH.setOnSeekBarChangeListener(null)
+            seekH.progress = scaleToProgress(item.heightScale)
+            seekH.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                    if (!fromUser) return
+                    val heightScale = progressToScale(progress)
+                    bindDetails(item, progressToScale(binding.seekWidth.progress), heightScale)
+                    onHeightScaleChange(item, heightScale)
+                }
+                override fun onStartTrackingTouch(sb: SeekBar) {}
+                override fun onStopTrackingTouch(sb: SeekBar) {
+                    onHeightScaleSettled(item, progressToScale(sb.progress))
+                }
+            })
+            binding.btnHeightDown.setOnClickListener { stepHeight(item, -SIZE_STEP) }
+            binding.btnHeightUp.setOnClickListener { stepHeight(item, SIZE_STEP) }
         }
 
-        private fun stepSize(item: OverlayItem, delta: Int) {
-            val progress = (binding.seekSize.progress + delta).coerceIn(0, 100)
-            binding.seekSize.progress = progress
+        private fun stepWidth(item: OverlayItem, delta: Int) {
+            val progress = (binding.seekWidth.progress + delta).coerceIn(0, 100)
+            binding.seekWidth.progress = progress
             val scale = progressToScale(progress)
-            bindDetails(item, scale)
+            bindDetails(item, scale, progressToScale(binding.seekHeight.progress))
             onScaleChange(item, scale)
             onScaleSettled(item, scale)
         }
 
-        private fun bindDetails(item: OverlayItem, scale: Float) {
+        private fun stepHeight(item: OverlayItem, delta: Int) {
+            val progress = (binding.seekHeight.progress + delta).coerceIn(0, 100)
+            binding.seekHeight.progress = progress
+            val heightScale = progressToScale(progress)
+            bindDetails(item, progressToScale(binding.seekWidth.progress), heightScale)
+            onHeightScaleChange(item, heightScale)
+            onHeightScaleSettled(item, heightScale)
+        }
+
+        private fun bindDetails(item: OverlayItem, scale: Float, heightScale: Float) {
             binding.tvOverlayDetails.text = when (item) {
                 is OverlayItem.Text ->
-                    "Text · ${item.fontSizeSp.toInt()}sp · " + transformDetails(scale, item.rotation)
+                    "Text · ${item.fontSizeSp.toInt()}sp · " + transformDetails(scale, heightScale)
                 is OverlayItem.Video ->
-                    transformDetails(scale, item.rotation) + if (item.loop) " · loop" else ""
-                else -> transformDetails(scale, item.rotation)
+                    transformDetails(scale, heightScale) + if (item.loop) " · loop" else ""
+                else -> transformDetails(scale, heightScale)
             }
         }
 
-        private fun transformDetails(scale: Float, rotation: Float): String =
-            "Scale %.1fx · %d°".format(scale, rotation.toInt())
+        private fun transformDetails(scale: Float, heightScale: Float): String =
+            "W %.1fx · H %.1fx".format(scale, heightScale)
 
         private fun loadImageThumbnail(uriString: String) {
             try {

@@ -129,6 +129,15 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                     loadOverlays()
                 }
             },
+            onHeightScaleChange = { item, heightScale ->
+                onOverlayLiveUpdate?.invoke(item.withHeightScale(heightScale))
+            },
+            onHeightScaleSettled = { item, heightScale ->
+                lifecycleScope.launch {
+                    overlayStore.updateOverlay(item.withHeightScale(heightScale))
+                    loadOverlays()
+                }
+            },
             onMoveUp = { item -> moveOverlay(item, towardFront = true) },
             onMoveDown = { item -> moveOverlay(item, towardFront = false) }
         )
@@ -291,13 +300,22 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         onOverlayLiveUpdate = listener
     }
 
-    /** Returns a copy of this overlay with [scale] applied, preserving all other fields. */
+    /** Returns a copy of this overlay with [scale] (width) applied, preserving other fields. */
     private fun OverlayItem.withScale(scale: Float): OverlayItem = when (this) {
         is OverlayItem.Image -> copy().also { it.scale = scale }
         is OverlayItem.Text -> copy().also { it.scale = scale }
         is OverlayItem.Gif -> copy().also { it.scale = scale }
         is OverlayItem.Video -> copy().also { it.scale = scale }
         is OverlayItem.Browser -> copy().also { it.scale = scale }
+    }
+
+    /** Returns a copy of this overlay with [heightScale] applied, preserving other fields. */
+    private fun OverlayItem.withHeightScale(heightScale: Float): OverlayItem = when (this) {
+        is OverlayItem.Image -> copy().also { it.heightScale = heightScale }
+        is OverlayItem.Text -> copy().also { it.heightScale = heightScale }
+        is OverlayItem.Gif -> copy().also { it.heightScale = heightScale }
+        is OverlayItem.Video -> copy().also { it.heightScale = heightScale }
+        is OverlayItem.Browser -> copy().also { it.heightScale = heightScale }
     }
 
     override fun onDestroyView() {

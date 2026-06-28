@@ -197,7 +197,7 @@ class OverlayRenderer(
             // Wrap once the whole overlay has slid off the left edge.
             if (x <= -widthPercent) x = 100f
             scrollPositions[item.id] = x
-            val topLeftY = (item.y * 100f) - (heightPercentFor(item, widthPercent) / 2f)
+            val topLeftY = (item.y * 100f) - (heightPercentFor(item) / 2f)
             filter.setPosition(x, topLeftY)
         }
     }
@@ -457,21 +457,12 @@ class OverlayRenderer(
 
     private fun applyTransform(filter: BaseFilterRender, item: OverlayItem) {
         if (filter !is BaseObjectFilterRender) return
-        // Browser/URL overlays are locked full-frame (like an OBS browser source that fills
-        // the canvas): always cover the whole frame so the page's own CSS positioning — not
-        // user dragging — places its widgets. Ignore x/y/scale/rotation entirely.
-        if (item is OverlayItem.Browser) {
-            filter.setPosition(0f, 0f)
-            filter.setScale(100f, 100f)
-            filter.setRotation(0)
-            return
-        }
         // Width as a percent of the stream width: scale=1.0 → 20% wide.
         val widthPercent = 20f * item.scale
-        // Height chosen so the content keeps its real aspect ratio on a non-square frame.
-        // setScale's two args are independent percentages of stream width/height, so equal
-        // values squash anything whose aspect != the stream's. heightPercent corrects that.
-        val heightPercent = heightPercentFor(item, widthPercent)
+        // Height as an INDEPENDENT percent of the stream height (driven by heightScale).
+        // When scale == heightScale the content keeps its real aspect ratio; moving the two
+        // sliders apart stretches it. Browser overlays default both to 5.0 → 100% × 100%.
+        val heightPercent = heightPercentFor(item)
         val topLeftY = (item.y * 100f) - (heightPercent / 2f)
         if (item is OverlayItem.Text && item.scroll) {
             // The ticker loop owns the horizontal position; seed it (off the right edge)
@@ -488,18 +479,18 @@ class OverlayRenderer(
     }
 
     /**
-     * Height percent (of stream height) that pairs with [widthPercent] (of stream width)
-     * to render the overlay's content undistorted. Derivation: rendered pixel box is
-     * (widthPercent% · streamW) × (heightPercent% · streamH); for that to match the content
-     * aspect (w/h) we need heightPercent = widthPercent · (streamW/streamH) / (w/h).
-     * Falls back to widthPercent (the legacy square-percent behaviour) if the content
-     * aspect isn't known yet.
+     * Height percent (of stream height), driven INDEPENDENTLY by [OverlayItem.heightScale].
+     * Base is 20% × heightScale (mirroring the 20% × scale width base), then corrected by the
+     * stream/content aspect ratio so that at heightScale == scale the content is undistorted:
+     * the pixel box (20%·scale·streamW) × (heightPercent%·streamH) then has the content's own
+     * aspect. Falls back to the uncorrected base if the content aspect isn't known yet.
      */
-    private fun heightPercentFor(item: OverlayItem, widthPercent: Float): Float {
-        val aspect = contentAspect[item.id] ?: return widthPercent
-        if (aspect <= 0f) return widthPercent
+    private fun heightPercentFor(item: OverlayItem): Float {
+        val base = 20f * item.heightScale
+        val aspect = contentAspect[item.id] ?: return base
+        if (aspect <= 0f) return base
         val streamAspect = streamWidth.toFloat() / streamHeight.toFloat()
-        return widthPercent * streamAspect / aspect
+        return base * streamAspect / aspect
     }
 
     private fun buildTextFilter(item: OverlayItem.Text): TextObjectFilterRender {

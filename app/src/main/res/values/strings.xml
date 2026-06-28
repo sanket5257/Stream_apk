@@ -68,6 +68,12 @@
     <string name="overlay_size_label">Size</string>
     <string name="overlay_size_decrease">Decrease size</string>
     <string name="overlay_size_increase">Increase size</string>
+    <string name="overlay_width_label">Width</string>
+    <string name="overlay_width_decrease">Decrease width</string>
+    <string name="overlay_width_increase">Increase width</string>
+    <string name="overlay_height_label">Height</string>
+    <string name="overlay_height_decrease">Decrease height</string>
+    <string name="overlay_height_increase">Increase height</string>
     <string name="no_overlays">No overlays yet.\nTap a button above to add one.</string>
     <string name="close">Close</string>
     <string name="overlays">Overlays</string>

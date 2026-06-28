@@ -157,7 +157,9 @@ class OverlayEditorView @JvmOverloads constructor(
     private fun halfExtents(item: OverlayItem): Pair<Float, Float> {
         val boxW = BASE_WIDTH_FRACTION * item.scale * width
         val aspect = (aspectProvider?.invoke(item.id) ?: 1f).coerceAtLeast(0.01f)
-        val boxH = boxW / aspect
+        // Height is driven independently by heightScale (mirrors OverlayRenderer): at
+        // heightScale == scale the box keeps the content aspect; moving them apart stretches.
+        val boxH = BASE_WIDTH_FRACTION * item.heightScale * width / aspect
         return (boxW / 2f) to (boxH / 2f)
     }
 
