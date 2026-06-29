@@ -126,8 +126,6 @@
 
     </LinearLayout>
 
-    </LinearLayout>
-
     <!-- Bottom Control Panel with Modern Design -->
     <LinearLayout
         android:id="@+id/bottomControlPanel"

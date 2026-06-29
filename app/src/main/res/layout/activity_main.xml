@@ -190,8 +190,6 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        </com.google.android.material.card.MaterialCardView>
-
         <!-- Quality Settings Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/qualitySettingsCard"
@@ -239,14 +237,13 @@
         <!-- Microphone source -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/tilMicSource"
-            style="@style/Widget.StreamForge.TextInput"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/mic_source_label"
             android:layout_marginBottom="16dp"
             app:startIconDrawable="@android:drawable/ic_btn_speak_now"
-            app:startIconTint="@color/brand_primary"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+            app:startIconTint="@color/brand_primary">
 
             <AutoCompleteTextView
                 android:id="@+id/actvMicSource"
@@ -261,14 +258,13 @@
         <!-- Resolution Dropdown -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/tilResolution"
-            style="@style/Widget.StreamForge.TextInput"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/resolution_label"
             android:layout_marginBottom="20dp"
             app:startIconDrawable="@android:drawable/ic_menu_crop"
-            app:startIconTint="@color/brand_primary"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+            app:startIconTint="@color/brand_primary">
 
             <AutoCompleteTextView
                 android:id="@+id/actvResolution"

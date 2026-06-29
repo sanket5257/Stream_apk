@@ -177,8 +177,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupDevMenu() {
-        // Long-press on title to open overlay test activity (dev feature)
-        binding.tvTitle.setOnLongClickListener {
+        // Long-press on welcome text to open overlay test activity (dev feature)
+        binding.tvWelcome.setOnLongClickListener {
             startActivity(Intent(this, OverlayTestActivity::class.java))
             Toast.makeText(this, "Opening Overlay Test", Toast.LENGTH_SHORT).show()
             true

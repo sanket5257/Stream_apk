@@ -78,18 +78,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvTitle" />
 
-    <TextView
-        android:id="@+id/tvSubtitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Sign in to start streaming"
-        android:textSize="14sp"
-        android:textColor="@color/text_tertiary"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvTitle" />
-
     <!-- Login Form Card -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/loginFormCard"
@@ -244,24 +232,6 @@
     </LinearLayout>
 
     </com.google.android.material.card.MaterialCardView>
-
-    <!-- Device Info -->
-    <TextView
-        android:id="@+id/tvDeviceInfo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:layout_marginBottom="24dp"
-        android:fontFamily="monospace"
-        android:textAlignment="center"
-        android:textSize="11sp"
-        android:textColor="@color/text_tertiary"
-        android:background="@drawable/bg_overlay_hud"
-        android:padding="12dp"
-        app:layout_constraintTop_toBottomOf="@id/loginFormCard"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
 
     <!-- Device Info -->
     <TextView
