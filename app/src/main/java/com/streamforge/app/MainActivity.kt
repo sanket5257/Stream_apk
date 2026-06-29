@@ -97,7 +97,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        loadConfig()
+        // Only load config on first launch, not every time we return from StreamActivity
+        if (isInitialLoad) {
+            loadConfig()
+        }
     }
 
     private fun setupResolutionDropdown() {
@@ -115,21 +118,17 @@ class MainActivity : AppCompatActivity() {
     private fun setupBitrateSliders() {
         // Video bitrate slider
         binding.sliderVideoBitrate.addOnChangeListener { _, value, _ ->
-            binding.tvVideoBitrateLabel.text = 
-                getString(R.string.video_bitrate_label, value.toInt())
+            binding.tvVideoBitrateValue.text = "${value.toInt()} kbps"
         }
         
         // Audio bitrate slider
         binding.sliderAudioBitrate.addOnChangeListener { _, value, _ ->
-            binding.tvAudioBitrateLabel.text = 
-                getString(R.string.audio_bitrate_label, value.toInt())
+            binding.tvAudioBitrateValue.text = "${value.toInt()} kbps"
         }
         
         // Set initial labels
-        binding.tvVideoBitrateLabel.text = 
-            getString(R.string.video_bitrate_label, binding.sliderVideoBitrate.value.toInt())
-        binding.tvAudioBitrateLabel.text = 
-            getString(R.string.audio_bitrate_label, binding.sliderAudioBitrate.value.toInt())
+        binding.tvVideoBitrateValue.text = "${binding.sliderVideoBitrate.value.toInt()} kbps"
+        binding.tvAudioBitrateValue.text = "${binding.sliderAudioBitrate.value.toInt()} kbps"
     }
 
     private fun setupMicDropdown() {

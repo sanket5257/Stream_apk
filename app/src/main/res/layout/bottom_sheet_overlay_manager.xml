@@ -3,9 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface"
+    android:background="@color/surface_card"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:paddingTop="8dp">
+
+    <!-- Bottom Sheet Handle -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:background="@color/divider"
+        android:alpha="0.6" />
 
     <!-- Header -->
     <LinearLayout
@@ -13,16 +22,26 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
         android:paddingBottom="16dp">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@android:drawable/ic_menu_gallery"
+            app:tint="@color/brand_primary" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginStart="12dp"
             android:text="@string/manage_overlays"
-            android:textColor="?android:textColorPrimary"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnClose"
@@ -30,8 +49,36 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:contentDescription="@string/close"
-            app:icon="@android:drawable/ic_menu_close_clear_cancel" />
+            app:icon="@android:drawable/ic_menu_close_clear_cancel"
+            app:iconTint="@color/text_secondary" />
     </LinearLayout>
+
+    <!-- Add Overlay Buttons Section -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        app:cardBackgroundColor="@color/surface_elevated"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:contentPadding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Add New Overlay"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:layout_marginBottom="12dp"
+                android:fontFamily="sans-serif-medium" />
 
     <!-- Add buttons row 1: Image + Text -->
     <LinearLayout
@@ -44,23 +91,29 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddImage"
-            style="@style/Widget.Material3.Button.Icon"
+            style="@style/Widget.Material3.Button.TonalButton.Icon"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:text="@string/add_image"
-            app:icon="@android:drawable/ic_menu_gallery" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_gallery"
+            app:iconSize="20dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddText"
-            style="@style/Widget.Material3.Button.Icon"
+            style="@style/Widget.Material3.Button.TonalButton.Icon"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:text="@string/add_text"
-            app:icon="@android:drawable/ic_menu_edit" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_edit"
+            app:iconSize="20dp" />
     </LinearLayout>
 
     <!-- Add buttons row 2: GIF + Video -->
@@ -70,38 +123,62 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingBottom="16dp">
+        android:paddingBottom="8dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddGif"
-            style="@style/Widget.Material3.Button.Icon"
+            style="@style/Widget.Material3.Button.TonalButton.Icon"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:text="@string/add_gif"
-            app:icon="@android:drawable/ic_menu_slideshow" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_slideshow"
+            app:iconSize="20dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddVideo"
-            style="@style/Widget.Material3.Button.Icon"
+            style="@style/Widget.Material3.Button.TonalButton.Icon"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:text="@string/add_video"
-            app:icon="@android:drawable/ic_media_play" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_media_play"
+            app:iconSize="20dp" />
     </LinearLayout>
 
-    <!-- Add buttons row 3: URL / browser overlay (StreamElements etc.) -->
+    <!-- Add buttons row 3: URL / browser overlay -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnAddUrl"
-        style="@style/Widget.Material3.Button.Icon"
+        style="@style/Widget.Material3.Button.TonalButton.Icon"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
         android:text="@string/add_url"
-        app:icon="@android:drawable/ic_menu_compass" />
+        android:textSize="13sp"
+        app:cornerRadius="12dp"
+        app:icon="@android:drawable/ic_menu_compass"
+        app:iconSize="20dp" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Overlay List Header -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginBottom="12dp"
+        android:text="Active Overlays"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary"
+        android:fontFamily="sans-serif-medium" />
 
     <!-- Overlay list -->
     <androidx.recyclerview.widget.RecyclerView
@@ -110,19 +187,41 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="16dp"
         android:scrollbars="vertical"
         android:fadeScrollbars="false"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
     <!-- Empty state -->
-    <TextView
+    <LinearLayout
         android:id="@+id/tvEmptyState"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:gravity="center"
-        android:text="@string/no_overlays"
-        android:textColor="?android:textColorSecondary"
-        android:textSize="16sp"
-        android:visibility="gone" />
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:src="@android:drawable/ic_menu_gallery"
+            android:alpha="0.3"
+            app:tint="@color/text_tertiary" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/no_overlays"
+            android:textAlignment="center"
+            android:textColor="@color/text_secondary"
+            android:textSize="16sp"
+            android:lineSpacingExtra="4dp" />
+
+    </LinearLayout>
+
 </LinearLayout>

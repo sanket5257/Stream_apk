@@ -535,17 +535,25 @@ class StreamActivity : AppCompatActivity() {
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
-        // Re-init the preview so the camera sensor orientation matches the new
-        // display rotation (e.g. flipping between landscape-left and right).
-        // Skip while live — the running encoder pipeline can't be rotated mid-stream.
+        // Don't re-init preview while streaming - the encoder can't handle it
+        // Let the preview adapt naturally to the new orientation
         if (!::rtmpCamera.isInitialized) return
         if (streamManager.state.value is StreamState.Live ||
-            streamManager.state.value is StreamState.Connecting) return
+            streamManager.state.value is StreamState.Connecting) {
+            // Stream is live - don't touch the camera/encoder
+            return
+        }
+        // Only restart preview if we're idle
         if (rtmpCamera.isOnPreview) {
             val facing = if (rtmpCamera.cameraFacing == CameraHelper.Facing.FRONT)
                 CameraHelper.Facing.FRONT else CameraHelper.Facing.BACK
             rtmpCamera.stopPreview()
-            rtmpCamera.startPreview(facing)
+            // Brief delay to let the surface settle
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (::rtmpCamera.isInitialized && !rtmpCamera.isOnPreview) {
+                    rtmpCamera.startPreview(facing)
+                }
+            }, 100)
         }
     }
 

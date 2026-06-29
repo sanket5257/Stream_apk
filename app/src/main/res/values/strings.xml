@@ -95,4 +95,13 @@
     <string name="backup_rtmp_url_label">Backup RTMP URL (optional)</string>
     <string name="mic_source_label">Microphone</string>
     <string name="mic_source_default">Default (system mic)</string>
+    
+    <!-- Premium UI Enhancements -->
+    <string name="signing_in">Signing in...</string>
+    <string name="processing">Processing...</string>
+    <string name="stream_connection_settings">Stream Connection</string>
+    <string name="quality_settings">Quality Settings</string>
+    <string name="active_overlays">Active Overlays</string>
+    <string name="add_new_overlay">Add New Overlay</string>
+    <string name="overlay_scale_label">Scale</string>
 </resources>

@@ -210,9 +210,7 @@ class LoginActivity : AppCompatActivity() {
                         "Session expired: ${result.message}",
                         Toast.LENGTH_LONG
                     ).show()
-                    // Show login form
-                    binding.loginForm.visibility = View.VISIBLE
-                    binding.progressBar.visibility = View.GONE
+                    // Show login form - it's always visible in new layout
                 }
             }
         }
@@ -224,7 +222,8 @@ class LoginActivity : AppCompatActivity() {
     }
     
     private fun setLoading(loading: Boolean) {
-        binding.progressBar.visibility = if (loading) View.VISIBLE else View.GONE
+        // Use the new loading overlay design
+        binding.loadingOverlay.visibility = if (loading) View.VISIBLE else View.GONE
         binding.btnLogin.isEnabled = !loading
         binding.etEmail.isEnabled = !loading
         binding.etUsername.isEnabled = !loading

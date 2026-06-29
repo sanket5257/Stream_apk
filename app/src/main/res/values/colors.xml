@@ -1,9 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand_primary">#E53935</color>
-    <color name="brand_primary_dark">#B71C1C</color>
-    <color name="brand_secondary">#FF7043</color>
-    <color name="surface_dark">#121212</color>
-    <color name="on_surface_dark">#FFFFFF</color>
-    <color name="ic_launcher_background">#121212</color>
+    <!-- Brand Colors - Modern Red/Purple gradient theme -->
+    <color name="brand_primary">#FF1744</color>
+    <color name="brand_primary_dark">#D50000</color>
+    <color name="brand_primary_light">#FF5252</color>
+    <color name="brand_secondary">#6200EA</color>
+    <color name="brand_secondary_dark">#4527A0</color>
+    <color name="brand_accent">#FF4081</color>
+    
+    <!-- Surface & Background -->
+    <color name="surface_dark">#0F0F0F</color>
+    <color name="surface_card">#1A1A1A</color>
+    <color name="surface_elevated">#252525</color>
+    <color name="background_gradient_start">#0F0F0F</color>
+    <color name="background_gradient_end">#1A1A2E</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B3B3B3</color>
+    <color name="text_tertiary">#808080</color>
+    <color name="text_on_primary">#FFFFFF</color>
+    
+    <!-- Status Colors -->
+    <color name="status_live">#FF1744</color>
+    <color name="status_success">#00E676</color>
+    <color name="status_warning">#FFD600</color>
+    <color name="status_error">#FF1744</color>
+    
+    <!-- Overlay & Transparency -->
+    <color name="overlay_dark">#CC000000</color>
+    <color name="overlay_medium">#80000000</color>
+    <color name="overlay_light">#40000000</color>
+    <color name="scrim">#B3000000</color>
+    
+    <!-- Interactive Elements -->
+    <color name="button_primary">#FF1744</color>
+    <color name="button_secondary">#6200EA</color>
+    <color name="ripple_color">#40FFFFFF</color>
+    <color name="divider">#333333</color>
+    
+    <!-- Launcher -->
+    <color name="ic_launcher_background">#0F0F0F</color>
 </resources>

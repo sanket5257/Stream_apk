@@ -104,8 +104,58 @@ class OverlayListAdapter(
         }
 
         private fun bindSizeControls(item: OverlayItem) {
-            // All overlays (Image/Text/Gif/Video/Browser) are independently resizable.
+            // All overlays (Image/Gif/Video/Browser) are independently resizable with W/H.
+            // TEXT overlays only get a single proportional Scale slider.
+            if (item is OverlayItem.Text) {
+                // Text: single proportional scale
+                binding.sizeControls.visibility = ViewGroup.VISIBLE
+                // Change label to "Scale" for text
+                binding.root.findViewById<android.widget.TextView>(
+                    binding.root.context.resources.getIdentifier(
+                        "tvWidthLabel", "id", binding.root.context.packageName
+                    )
+                )?.text = "Scale"
+                // Hide height controls for text
+                binding.seekHeight.visibility = android.view.View.GONE
+                binding.btnHeightDown.visibility = android.view.View.GONE
+                binding.btnHeightUp.visibility = android.view.View.GONE
+                
+                val seekW = binding.seekWidth
+                seekW.setOnSeekBarChangeListener(null)
+                seekW.progress = scaleToProgress(item.scale)
+                seekW.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                        if (!fromUser) return
+                        val scale = progressToScale(progress)
+                        // For text, scale both dimensions proportionally
+                        bindDetails(item, scale, scale)
+                        onScaleChange(item, scale)
+                        // Also update height scale to match for text
+                        onHeightScaleChange(item, scale)
+                    }
+                    override fun onStartTrackingTouch(sb: SeekBar) {}
+                    override fun onStopTrackingTouch(sb: SeekBar) {
+                        val scale = progressToScale(sb.progress)
+                        onScaleSettled(item, scale)
+                        onHeightScaleSettled(item, scale)
+                    }
+                })
+                binding.btnWidthDown.setOnClickListener { stepTextScale(item, -SIZE_STEP) }
+                binding.btnWidthUp.setOnClickListener { stepTextScale(item, SIZE_STEP) }
+                return
+            }
+
+            // Images/GIFs/Videos/Browser overlays get independent W/H sliders
             binding.sizeControls.visibility = ViewGroup.VISIBLE
+            // Reset label to "Width" for non-text overlays
+            binding.root.findViewById<android.widget.TextView>(
+                binding.root.context.resources.getIdentifier(
+                    "tvWidthLabel", "id", binding.root.context.packageName
+                )
+            )?.text = "Width"
+            binding.seekHeight.visibility = android.view.View.VISIBLE
+            binding.btnHeightDown.visibility = android.view.View.VISIBLE
+            binding.btnHeightUp.visibility = android.view.View.VISIBLE
 
             // --- Width slider (drives item.scale) ---
             val seekW = binding.seekWidth
@@ -147,6 +197,17 @@ class OverlayListAdapter(
             binding.btnHeightDown.setOnClickListener { stepHeight(item, -SIZE_STEP) }
             binding.btnHeightUp.setOnClickListener { stepHeight(item, SIZE_STEP) }
         }
+        
+        private fun stepTextScale(item: OverlayItem, delta: Int) {
+            val progress = (binding.seekWidth.progress + delta).coerceIn(0, 100)
+            binding.seekWidth.progress = progress
+            val scale = progressToScale(progress)
+            bindDetails(item, scale, scale)
+            onScaleChange(item, scale)
+            onScaleSettled(item, scale)
+            onHeightScaleChange(item, scale)
+            onHeightScaleSettled(item, scale)
+        }
 
         private fun stepWidth(item: OverlayItem, delta: Int) {
             val progress = (binding.seekWidth.progress + delta).coerceIn(0, 100)
@@ -169,7 +230,7 @@ class OverlayListAdapter(
         private fun bindDetails(item: OverlayItem, scale: Float, heightScale: Float) {
             binding.tvOverlayDetails.text = when (item) {
                 is OverlayItem.Text ->
-                    "Text · ${item.fontSizeSp.toInt()}sp · " + transformDetails(scale, heightScale)
+                    "Text · ${item.fontSizeSp.toInt()}sp · Scale %.1fx".format(scale)
                 is OverlayItem.Video ->
                     transformDetails(scale, heightScale) + if (item.loop) " · loop" else ""
                 else -> transformDetails(scale, heightScale)
