@@ -1,40 +1,49 @@
 package com.streamforge.app.overlay
 
 import android.content.Context
+import android.graphics.Color
 import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Log
 import android.view.Surface
+import com.pedro.encoder.input.gl.render.filters.`object`.BaseObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.SurfaceFilterRender
 
 /**
- * Phase 6 upgrade: streams a video directly into RootEncoder's GL pipeline via
- * SurfaceFilterRender. Frames go: hardware decoder → SurfaceTexture (GL OES) →
- * RootEncoder's filter pipeline → encoder. No CPU readback, no per-frame bitmap
- * allocation — runs at the source's native frame rate.
+ * Streams a video into RootEncoder's GL pipeline. Frames go: hardware decoder →
+ * SurfaceTexture (GL OES) → filter → encoder. No CPU readback.
  *
- * Audio is muted; this is a visual overlay only. Loop is configurable.
+ * If [chromaEnabled], a [ChromaVideoFilterRender] is used so the key colour
+ * (green-screen) is removed on the GPU and the camera shows through; otherwise a plain
+ * [SurfaceFilterRender]. Audio is muted; loop is configurable.
  */
 class VideoOverlayPlayer(
     private val context: Context,
     private val uri: Uri,
-    private val loop: Boolean
+    private val loop: Boolean,
+    chromaEnabled: Boolean = false,
+    chromaColor: Int = Color.GREEN,
+    chromaSensitive: Float = 0.45f
 ) {
     private var mediaPlayer: MediaPlayer? = null
     private var surface: Surface? = null
     private val lock = Any()
     private var released = false
 
-    /**
-     * The filter the caller adds to `rtmpCamera.glInterface`. We pass a callback
-     * so we can attach the MediaPlayer only once the SurfaceTexture is GL-ready.
-     */
-    val filter: SurfaceFilterRender = SurfaceFilterRender(
-        SurfaceFilterRender.SurfaceReadyCallback { surfaceTexture ->
-            attachMediaPlayer(surfaceTexture)
+    /** The filter the caller adds to `rtmpCamera.glInterface`. */
+    val filter: BaseObjectFilterRender = if (chromaEnabled) {
+        ChromaVideoFilterRender { st -> attachMediaPlayer(st) }.apply {
+            setChromaColor(
+                Color.red(chromaColor) / 255f,
+                Color.green(chromaColor) / 255f,
+                Color.blue(chromaColor) / 255f
+            )
+            setSensitive(chromaSensitive)
         }
-    )
+    } else {
+        SurfaceFilterRender { st -> attachMediaPlayer(st) }
+    }
 
     private fun attachMediaPlayer(surfaceTexture: SurfaceTexture) {
         synchronized(lock) {

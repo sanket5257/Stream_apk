@@ -81,6 +81,12 @@ sealed class OverlayItem {
         override val id: String,
         val uri: String,
         val loop: Boolean = true,
+        /** Chroma key (green-screen) removal. */
+        val chromaEnabled: Boolean = false,
+        /** Key colour as ARGB int; default pure green. */
+        val chromaColor: Int = 0xFF00FF00.toInt(),
+        /** Key radius/strength (~0.2 tight … 0.8 loose). */
+        val chromaSensitive: Float = 0.45f,
         override var x: Float = 0.5f,
         override var y: Float = 0.5f,
         override var scale: Float = 1.0f,

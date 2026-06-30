@@ -523,7 +523,12 @@ class OverlayRenderer(
     }
 
     private fun buildVideoFilter(item: OverlayItem.Video): BaseObjectFilterRender {
-        val player = VideoOverlayPlayer(context, Uri.parse(item.uri), item.loop)
+        val player = VideoOverlayPlayer(
+            context, Uri.parse(item.uri), item.loop,
+            chromaEnabled = item.chromaEnabled,
+            chromaColor = item.chromaColor,
+            chromaSensitive = item.chromaSensitive
+        )
         videoPlayers[item.id] = player
         return player.filter
     }

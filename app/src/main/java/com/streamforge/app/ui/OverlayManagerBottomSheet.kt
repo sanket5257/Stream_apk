@@ -62,9 +62,14 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     private val videoPickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        handlePickerResult(result.resultCode, result.data) { uri ->
-            OverlayItem.Video(id = UUID.randomUUID().toString(), uri = uri.toString())
-        }
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        val uri = result.data?.data ?: return@registerForActivityResult
+        try {
+            requireContext().contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: SecurityException) { }
+        showVideoChromaDialog(uri)
     }
 
     override fun onCreateView(
@@ -223,6 +228,65 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                     return@setPositiveButton
                 }
                 val overlay = OverlayItem.Browser(id = UUID.randomUUID().toString(), url = url)
+                lifecycleScope.launch {
+                    overlayStore.addOverlay(overlay)
+                    loadOverlays()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * After picking a video, offer chroma-key (green-screen) removal + a sensitivity slider,
+     * then add the overlay. The key colour defaults to green (most common); the GPU shader
+     * removes it so the camera shows through.
+     */
+    private fun showVideoChromaDialog(uri: Uri) {
+        val ctx = requireContext()
+        val density = resources.displayMetrics.density
+        val pad = (20 * density).toInt()
+
+        val chromaSwitch = android.widget.Switch(ctx).apply {
+            text = "Remove green background (chroma key)"
+        }
+        val sensLabel = android.widget.TextView(ctx).apply {
+            text = "Chroma sensitivity"
+            setPadding(0, pad / 2, 0, 0)
+            visibility = View.GONE
+        }
+        val sensBar = android.widget.SeekBar(ctx).apply {
+            max = 100
+            progress = 42
+            visibility = View.GONE
+        }
+        chromaSwitch.setOnCheckedChangeListener { _, checked ->
+            val v = if (checked) View.VISIBLE else View.GONE
+            sensLabel.visibility = v
+            sensBar.visibility = v
+        }
+        val container = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(chromaSwitch)
+            addView(sensLabel)
+            addView(sensBar)
+        }
+
+        androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setTitle("Add video overlay")
+            .setView(container)
+            .setPositiveButton("Add") { _, _ ->
+                val enabled = chromaSwitch.isChecked
+                // Map slider 0..100 to a ~0.2 (tight) .. 0.8 (loose) key radius.
+                val sensitive = 0.2f + (sensBar.progress / 100f) * 0.6f
+                val overlay = OverlayItem.Video(
+                    id = UUID.randomUUID().toString(),
+                    uri = uri.toString(),
+                    chromaEnabled = enabled,
+                    chromaColor = android.graphics.Color.GREEN,
+                    chromaSensitive = sensitive
+                )
                 lifecycleScope.launch {
                     overlayStore.addOverlay(overlay)
                     loadOverlays()
