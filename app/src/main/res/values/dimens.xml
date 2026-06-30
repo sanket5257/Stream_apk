@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ==================================================================
+         StreamForge Design System - SPACING / SHAPE / ELEVATION SCALE
+         One 4dp grid. Use these everywhere instead of ad-hoc dp values.
+         ================================================================== -->
+
+    <!-- Spacing (4dp grid) -->
+    <dimen name="space_xxs">2dp</dimen>
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">8dp</dimen>
+    <dimen name="space_md">12dp</dimen>
+    <dimen name="space_lg">16dp</dimen>
+    <dimen name="space_xl">20dp</dimen>
+    <dimen name="space_2xl">24dp</dimen>
+    <dimen name="space_3xl">32dp</dimen>
+    <dimen name="space_4xl">40dp</dimen>
+
+    <!-- Standard screen edge padding -->
+    <dimen name="screen_margin">16dp</dimen>
+    <dimen name="section_gap">24dp</dimen>
+
+    <!-- Corner radii -->
+    <dimen name="radius_xs">8dp</dimen>
+    <dimen name="radius_sm">12dp</dimen>
+    <dimen name="radius_md">16dp</dimen>
+    <dimen name="radius_lg">20dp</dimen>
+    <dimen name="radius_xl">28dp</dimen>
+    <dimen name="radius_pill">999dp</dimen>
+
+    <!-- Elevation -->
+    <dimen name="elevation_none">0dp</dimen>
+    <dimen name="elevation_card">1dp</dimen>
+    <dimen name="elevation_raised">3dp</dimen>
+    <dimen name="elevation_overlay">8dp</dimen>
+
+    <!-- Touch targets / sizing -->
+    <dimen name="touch_target_min">48dp</dimen>
+    <dimen name="button_height">52dp</dimen>
+    <dimen name="icon_sm">20dp</dimen>
+    <dimen name="icon_md">24dp</dimen>
+    <dimen name="icon_lg">32dp</dimen>
+    <dimen name="avatar_sm">32dp</dimen>
+    <dimen name="action_tile_height">96dp</dimen>
+    <dimen name="event_thumb_size">72dp</dimen>
+</resources>

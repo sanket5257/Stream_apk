@@ -10,7 +10,9 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.streamforge.app.R
 import com.streamforge.app.databinding.BottomSheetOverlayManagerBinding
@@ -30,6 +32,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
 
     private lateinit var overlayStore: OverlayStore
     private lateinit var adapter: OverlayListAdapter
+    private lateinit var itemTouchHelper: ItemTouchHelper
 
     private var onOverlaysChanged: ((List<OverlayItem>) -> Unit)? = null
 
@@ -138,12 +141,40 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                     loadOverlays()
                 }
             },
-            onMoveUp = { item -> moveOverlay(item, towardFront = true) },
-            onMoveDown = { item -> moveOverlay(item, towardFront = false) }
+            onStartDrag = { vh -> itemTouchHelper.startDrag(vh) }
         )
         binding.rvOverlays.layoutManager = LinearLayoutManager(requireContext())
         binding.rvOverlays.adapter = adapter
         binding.rvOverlays.isNestedScrollingEnabled = true
+
+        // Drag-to-reorder stacking. List is front-most first; dropping persists the new
+        // z-order. No swipe.
+        val callback = object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+        ) {
+            override fun isLongPressDragEnabled() = false
+
+            override fun onMove(
+                rv: RecyclerView,
+                vh: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val from = vh.adapterPosition
+                val to = target.adapterPosition
+                if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) return false
+                adapter.moveItem(from, to)
+                return true
+            }
+
+            override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
+                super.clearView(rv, vh)
+                persistOrder()
+            }
+        }
+        itemTouchHelper = ItemTouchHelper(callback)
+        itemTouchHelper.attachToRecyclerView(binding.rvOverlays)
     }
 
     private fun setupButtons() {
@@ -270,23 +301,15 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     }
 
     /**
-     * Move an overlay one step in the stacking order and persist the whole list with
-     * normalized zIndex values. The displayed list is front-most first, so moving "toward the
-     * front" means a smaller list index / higher zIndex.
+     * Persist the current drag order as stacking (z-order). The displayed list is
+     * front-most first, so the top row gets the highest zIndex. Reloading re-broadcasts
+     * the new order to the live GL renderer + gesture surface so stacking updates on drop.
      */
-    private fun moveOverlay(item: OverlayItem, towardFront: Boolean) {
+    private fun persistOrder() {
+        val ordered = adapter.currentOrder().toMutableList()
+        val last = ordered.size - 1
+        ordered.forEachIndexed { i, ov -> ov.zIndex = last - i }
         lifecycleScope.launch {
-            val ordered = overlayStore.loadOverlays()
-                .sortedByDescending { it.zIndex }
-                .toMutableList()
-            val index = ordered.indexOfFirst { it.id == item.id }
-            if (index < 0) return@launch
-            val target = if (towardFront) index - 1 else index + 1
-            if (target < 0 || target >= ordered.size) return@launch
-            ordered[index] = ordered[target].also { ordered[target] = ordered[index] }
-            // Re-stamp zIndex so front-first display order == descending zIndex.
-            val last = ordered.size - 1
-            ordered.forEachIndexed { i, ov -> ov.zIndex = last - i }
             overlayStore.saveOverlays(ordered)
             loadOverlays()
         }

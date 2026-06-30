@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ==================================================================
+         StreamForge Design System - COLOR TOKENS (Dark / night)
+         Same token names as values/colors.xml, dark-mode values.
+         ================================================================== -->
+
+    <!-- Brand -->
+    <color name="brand_primary">#FF4D4D</color>
+    <color name="brand_primary_dark">#CC0000</color>
+    <color name="brand_primary_light">#FF7A7A</color>
+    <color name="brand_primary_container">#5C0A0A</color>
+    <color name="on_brand_primary_container">#FFDAD6</color>
+
+    <color name="brand_secondary">#5EA0FF</color>
+    <color name="brand_secondary_dark">#3D7BD6</color>
+    <color name="brand_accent">#FF6E9C</color>
+
+    <!-- Surfaces and background (dark) -->
+    <color name="surface_dark">#0F0F0F</color>
+    <color name="surface_card">#1C1C1E</color>
+    <color name="surface_elevated">#2A2A2D</color>
+    <color name="surface_variant">#2F2F33</color>
+    <color name="background_gradient_start">#0F0F0F</color>
+    <color name="background_gradient_end">#15151B</color>
+
+    <!-- Text -->
+    <color name="text_primary">#F2F2F3</color>
+    <color name="text_secondary">#AAAEB3</color>
+    <color name="text_tertiary">#76797E</color>
+    <color name="text_on_primary">#FFFFFF</color>
+
+    <!-- Lines -->
+    <color name="divider">#2E2E31</color>
+    <color name="outline">#3A3A3E</color>
+
+    <!-- Primary ACTION color (reference green) -->
+    <color name="action_green">#2ED68C</color>
+    <color name="action_green_dark">#16B36A</color>
+    <color name="on_action">#06371F</color>
+    <color name="action_green_container">#0E3D2A</color>
+    <color name="on_action_container">#A7F3CF</color>
+
+    <!-- Status -->
+    <color name="status_live">#FF4D4D</color>
+    <color name="status_success">#2ED68C</color>
+    <color name="status_success_container">#0E3D2A</color>
+    <color name="status_warning">#FFC03D</color>
+    <color name="status_error">#FF6E79</color>
+    <color name="status_scheduled">#5EA0FF</color>
+
+    <!-- Action-tile accents -->
+    <color name="tile_live_fg">#F58BB8</color>
+    <color name="tile_live_bg">#3A1E2A</color>
+    <color name="tile_rec_fg">#FF8088</color>
+    <color name="tile_rec_bg">#3A1E20</color>
+    <color name="tile_schedule_fg">#4FD0D0</color>
+    <color name="tile_schedule_bg">#0E2E2E</color>
+
+    <!-- Brand logo gradient -->
+    <color name="logo_grad_start">#FF6FA0</color>
+    <color name="logo_grad_mid">#9B79FF</color>
+    <color name="logo_grad_end">#5EB3FF</color>
+
+    <!-- Overlays / scrims -->
+    <color name="overlay_dark">#CC000000</color>
+    <color name="overlay_medium">#80000000</color>
+    <color name="overlay_light">#40000000</color>
+    <color name="scrim">#B3000000</color>
+
+    <!-- Interactive -->
+    <color name="button_primary">#FF4D4D</color>
+    <color name="button_secondary">#5EA0FF</color>
+    <color name="ripple_color">#33FFFFFF</color>
+
+    <color name="ic_launcher_background">#FF0000</color>
+</resources>

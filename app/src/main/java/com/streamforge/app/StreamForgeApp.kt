@@ -2,6 +2,7 @@ package com.streamforge.app
 
 import android.app.Application
 import android.util.Log
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.streamforge.app.auth.AuthManager
@@ -15,7 +16,12 @@ import kotlinx.coroutines.launch
 class StreamForgeApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        
+
+        // Apply the user's saved theme (Profile -> Theme) before any UI shows.
+        val mode = getSharedPreferences("ui_prefs", MODE_PRIVATE)
+            .getInt(ProfileActivity.KEY_NIGHT_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+        AppCompatDelegate.setDefaultNightMode(mode)
+
         // Perform periodic auth validation on app start
         validateAuthOnStartup()
     }

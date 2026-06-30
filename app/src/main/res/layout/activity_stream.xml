@@ -6,219 +6,203 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <!-- Camera Preview -->
+    <!-- Camera preview (must stay OpenGlView for RootEncoder) -->
     <com.pedro.library.view.OpenGlView
         android:id="@+id/openGlView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:keepScreenOn="true" />
 
-    <!-- Overlay Editor Surface -->
+    <!-- Overlay gesture surface -->
     <com.streamforge.app.ui.OverlayEditorView
         android:id="@+id/overlayEditor"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@android:color/transparent" />
 
-    <!-- Top Bar Container with Gradient Background -->
+    <!-- ===== Top scrim: LIVE status + stats + mic meter ===== -->
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="@drawable/bg_overlay_hud"
-        android:padding="16dp"
-        app:layout_constraintTop_toTopOf="parent"
+        android:background="@drawable/bg_scrim_top"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/space_lg"
+        android:paddingTop="@dimen/space_md"
+        android:paddingBottom="@dimen/space_2xl"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintTop_toTopOf="parent">
 
+        <!-- LIVE / status pill -->
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:background="@drawable/bg_hud_chip"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:paddingHorizontal="@dimen/space_md"
+            android:paddingVertical="@dimen/space_sm">
 
-            <!-- Audio Level Indicator -->
-            <LinearLayout
-                android:id="@+id/audioLevelContainer"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:background="@drawable/bg_card_elevated"
-                android:padding="12dp">
+            <ImageView
+                android:id="@+id/ivStatusDot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="@dimen/space_sm"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_live_dot"
+                android:visibility="gone" />
 
-                <TextView
-                    android:id="@+id/tvMicLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/mic_level"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="11sp"
-                    android:fontFamily="sans-serif-medium" />
-
-                <ProgressBar
-                    android:id="@+id/audioLevelBar"
-                    style="?android:attr/progressBarStyleHorizontal"
-                    android:layout_width="match_parent"
-                    android:layout_height="8dp"
-                    android:layout_marginTop="6dp"
-                    android:max="100"
-                    android:progress="0"
-                    android:progressTint="@color/status_success"
-                    android:progressBackgroundTint="@color/divider" />
-
-            </LinearLayout>
-
-            <Space
-                android:layout_width="16dp"
-                android:layout_height="1dp" />
-
-            <!-- Stream Status Badge -->
-            <LinearLayout
+            <TextView
+                android:id="@+id/tvStreamStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="@drawable/bg_card_elevated"
-                android:padding="12dp"
-                android:gravity="end">
+                android:text="@string/status_idle"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
+        </LinearLayout>
 
-                    <ImageView
-                        android:id="@+id/ivStatusDot"
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
-                        android:src="@drawable/ic_live_dot"
-                        android:visibility="gone" />
+        <!-- Stats HUD chip -->
+        <TextView
+            android:id="@+id/tvStatsHud"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_sm"
+            android:background="@drawable/bg_hud_chip"
+            android:fontFamily="monospace"
+            android:paddingHorizontal="@dimen/space_md"
+            android:paddingVertical="@dimen/space_sm"
+            android:textColor="#E6FFFFFF"
+            android:textSize="12sp"
+            android:visibility="gone" />
 
-                    <TextView
-                        android:id="@+id/tvStreamStatus"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:text="@string/status_idle"
-                        android:textColor="@android:color/white"
-                        android:textSize="15sp"
-                        android:textStyle="bold"
-                        android:fontFamily="sans-serif-medium" />
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
-                </LinearLayout>
+        <!-- Mic level meter -->
+        <LinearLayout
+            android:id="@+id/audioLevelContainer"
+            android:layout_width="150dp"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_hud_chip"
+            android:orientation="vertical"
+            android:paddingHorizontal="@dimen/space_md"
+            android:paddingVertical="@dimen/space_sm">
 
-                <!-- Stats HUD -->
-                <TextView
-                    android:id="@+id/tvStatsHud"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:fontFamily="monospace"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="11sp"
-                    android:visibility="gone" />
+            <TextView
+                android:id="@+id/tvMicLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mic_level"
+                android:textColor="#B3FFFFFF"
+                android:textSize="10sp" />
 
-            </LinearLayout>
+            <ProgressBar
+                android:id="@+id/audioLevelBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="@dimen/space_xs"
+                android:max="100"
+                android:progress="0"
+                android:progressBackgroundTint="#40FFFFFF"
+                android:progressTint="@color/status_success" />
 
         </LinearLayout>
 
     </LinearLayout>
 
-    <!-- Bottom Control Panel with Modern Design -->
+    <!-- ===== Bottom scrim: controls + Go Live ===== -->
     <LinearLayout
         android:id="@+id/bottomControlPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="@drawable/bg_overlay_hud"
-        android:padding="16dp"
+        android:background="@drawable/bg_scrim_bottom"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/space_lg"
+        android:paddingTop="@dimen/space_3xl"
+        android:paddingBottom="@dimen/space_lg"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
 
-        <!-- Main Control Buttons Row -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginBottom="12dp">
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnManageOverlays"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="@dimen/space_md"
+            android:contentDescription="@string/overlays"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@color/overlay_dark"
+            app:icon="@drawable/ic_layers"
+            app:iconTint="@android:color/white" />
 
-            <!-- Overlay Management Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnManageOverlays"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
-                android:layout_height="56dp"
-                android:layout_marginEnd="8dp"
-                android:text="@string/overlays"
-                android:textSize="14sp"
-                app:backgroundTint="@color/surface_elevated"
-                app:cornerRadius="12dp"
-                app:icon="@android:drawable/ic_menu_gallery"
-                app:iconTint="@color/brand_primary" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnMuteToggle"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="@dimen/space_md"
+            android:contentDescription="@string/mute"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@color/overlay_dark"
+            app:icon="@drawable/ic_mic"
+            app:iconTint="@android:color/white" />
 
-            <!-- Mute Toggle Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnMuteToggle"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
-                android:layout_height="56dp"
-                android:layout_marginEnd="8dp"
-                android:text="@string/mute"
-                android:textSize="14sp"
-                app:backgroundTint="@color/surface_elevated"
-                app:cornerRadius="12dp"
-                app:icon="@android:drawable/ic_btn_speak_now"
-                app:iconTint="@color/brand_primary" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSwitchCamera"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="@dimen/space_md"
+            android:contentDescription="@string/switch_camera"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@color/overlay_dark"
+            app:icon="@drawable/ic_cam_switch"
+            app:iconTint="@android:color/white" />
 
-            <!-- Switch Camera Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSwitchCamera"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
-                android:layout_height="56dp"
-                android:layout_marginEnd="8dp"
-                android:text="@string/switch_camera"
-                android:textSize="14sp"
-                app:backgroundTint="@color/surface_elevated"
-                app:cornerRadius="12dp"
-                app:icon="@android:drawable/ic_menu_camera" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRotateScreen"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:contentDescription="@string/rotate_screen"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@color/overlay_dark"
+            app:icon="@drawable/ic_rotate"
+            app:iconTint="@android:color/white" />
 
-            <!-- Rotate Screen Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnRotateScreen"
-                style="@style/Widget.Material3.Button.TonalButton.Icon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:contentDescription="@string/rotate_screen"
-                app:backgroundTint="@color/surface_elevated"
-                app:cornerRadius="12dp"
-                app:icon="@android:drawable/ic_menu_rotate"
-                app:iconGravity="textStart"
-                app:iconPadding="0dp"
-                app:iconSize="24dp"
-                app:iconTint="@color/brand_primary" />
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
-        </LinearLayout>
-
-        <!-- Go Live / Stop Button -->
+        <!-- Go Live / Stop -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnGoLive"
             style="@style/Widget.StreamForge.Button.Live"
-            android:layout_width="match_parent"
-            android:layout_height="64dp"
-            android:background="@drawable/bg_button_live"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:minWidth="200dp"
             android:text="@string/go_live"
-            android:textSize="20sp"
-            app:backgroundTint="@null"
-            app:cornerRadius="12dp"
+            android:textColor="@android:color/white"
+            android:textSize="18sp"
+            app:cornerRadius="@dimen/radius_pill"
             app:icon="@drawable/ic_live_dot"
-            app:iconGravity="textStart"
-            app:iconSize="28dp"
-            app:iconPadding="12dp" />
+            app:iconPadding="@dimen/space_sm"
+            app:iconSize="24dp"
+            app:iconTint="@android:color/white" />
 
     </LinearLayout>
 

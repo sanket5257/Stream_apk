@@ -147,15 +147,15 @@ class BrowserOverlaySource(
             return
         }
         try {
-            // The page lands in the top-left corner / doesn't fill the frame when two sizes
-            // disagree and we draw 1:1:
-            //  1. The WebView's laid-out size (wv.draw paints only that area). The Presentation
-            //     doesn't reliably lay it out at renderWidth×renderHeight, so force it here.
-            //  2. The capture canvas's size — lockCanvas returns whatever buffer the GL
-            //     pipeline allocated for this SurfaceTexture (setDefaultBufferSize doesn't
-            //     reliably stick once SurfaceFilterRender owns the texture).
-            // Force the WebView to exactly renderWidth×renderHeight, then scale the canvas so
-            // that area fills the actual buffer — covering the whole frame regardless of either.
+            // Keep the WebView laid out at its authored render size so the page renders
+            // correctly, then STRETCH its actual content to fill the whole capture buffer.
+            // The page often paints shorter than the canvas (its content box is < the full
+            // height), which left the lower part transparent and anchored the visible pixels
+            // top-left. Mapping the content box (renderWidth × contentPx) onto the full buffer
+            // makes it cover the entire frame automatically — no manual sizing needed.
+            // Keep the WebView at the authored render size; the injected CSS (see
+            // WebPresentation) stretches the page's own content to fill that viewport, so
+            // here we just map the full viewport onto the capture buffer.
             if (wv.width != renderWidth || wv.height != renderHeight) {
                 wv.measure(
                     View.MeasureSpec.makeMeasureSpec(renderWidth, View.MeasureSpec.EXACTLY),
@@ -165,10 +165,6 @@ class BrowserOverlaySource(
             }
             val cw = canvas.width
             val ch = canvas.height
-            if (!loggedSizes) {
-                loggedSizes = true
-                Log.d(TAG, "drawFrame canvas=${cw}x${ch} webview=${wv.width}x${wv.height} render=${renderWidth}x${renderHeight}")
-            }
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
             if (cw > 0 && ch > 0 && (cw != renderWidth || ch != renderHeight)) {
                 canvas.scale(cw.toFloat() / renderWidth, ch.toFloat() / renderHeight)
@@ -248,7 +244,33 @@ class BrowserOverlaySource(
                 useWideViewPort = false
                 cacheMode = WebSettings.LOAD_DEFAULT
             }
-            wv.webViewClient = WebViewClient()
+            // Force the page to fill the full 1920×1080 canvas. Some overlay pages don't
+            // stretch html/body to 100% height, so bottom-anchored widgets (e.g. a news
+            // ticker) render high and the lower part of the frame stays empty. Pin the
+            // document to the exact render size once it loads.
+            wv.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, finishedUrl: String?) {
+                    super.onPageFinished(view, finishedUrl)
+                    // StreamElements overlays render onto a FIXED-size canvas element (#overlay
+                    // / .overlay) sized to the resolution set in the SE dashboard — commonly
+                    // 1280×720, which then sits in the top-left of our 1920×1080 WebView. Scale
+                    // the whole page so that canvas element fills our render size. For a 16:9
+                    // overlay on a 16:9 render the X/Y factors are equal → uniform scale, NO
+                    // distortion (just the overlay's native upscale). Re-run because the canvas
+                    // and its widgets initialise asynchronously.
+                    val js = "(function(){try{" +
+                        "var b=document.body;if(!b)return;" +
+                        "b.style.margin='0';b.style.padding='0';b.style.overflow='hidden';" +
+                        "var ov=document.querySelector('#overlay,.overlay');" +
+                        "var ow=ov?ov.offsetWidth:0,oh=ov?ov.offsetHeight:0;" +
+                        "if(ow>0&&oh>0){var sx=$renderWidth/ow,sy=$renderHeight/oh;" +
+                        "b.style.transformOrigin='0 0';b.style.transform='scale('+sx+','+sy+')';}" +
+                        "}catch(e){}})();"
+                    view.evaluateJavascript(js, null)
+                    view.postDelayed({ try { view.evaluateJavascript(js, null) } catch (_: Exception) {} }, 1000)
+                    view.postDelayed({ try { view.evaluateJavascript(js, null) } catch (_: Exception) {} }, 2500)
+                }
+            }
             wv.webChromeClient = WebChromeClient()
             wv.isVerticalScrollBarEnabled = false
             wv.isHorizontalScrollBarEnabled = false

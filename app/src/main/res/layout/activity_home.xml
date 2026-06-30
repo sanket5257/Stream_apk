@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface_dark"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical"
+    tools:context=".HomeActivity">
+
+    <!-- Header: logo + avatar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/screen_margin"
+        android:paddingTop="@dimen/space_md"
+        android:paddingEnd="@dimen/screen_margin"
+        android:paddingBottom="@dimen/space_md">
+
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:contentDescription="@null"
+            android:src="@drawable/logo_streamforge" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_sm"
+            android:layout_weight="1"
+            android:text="StreamForge"
+            android:textAppearance="@style/TextAppearance.SF.TitleLarge" />
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/ivAvatar"
+            android:layout_width="@dimen/avatar_sm"
+            android:layout_height="@dimen/avatar_sm"
+            android:background="@color/surface_elevated"
+            android:contentDescription="Profile"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_person"
+            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.SF.Circle"
+            app:tint="@color/text_secondary" />
+
+    </LinearLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingHorizontal="@dimen/screen_margin"
+        android:paddingBottom="@dimen/space_2xl">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Go Live hero -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.StreamForge.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                app:contentPadding="@dimen/space_2xl">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <FrameLayout
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
+                        android:background="@drawable/bg_tile_live">
+
+                        <ImageView
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_tile_live" />
+                    </FrameLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_lg"
+                        android:text="Go Live on YouTube"
+                        android:textAppearance="@style/TextAppearance.SF.TitleLarge" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_xs"
+                        android:gravity="center"
+                        android:text="Stream live from your camera with overlays"
+                        android:textAppearance="@style/TextAppearance.SF.BodyMedium" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGoLive"
+                        style="@style/Widget.StreamForge.Button.Live"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_xl"
+                        android:text="@string/go_live"
+                        android:textColor="@color/text_on_primary"
+                        app:cornerRadius="@dimen/radius_pill"
+                        app:icon="@drawable/ic_live_dot"
+                        app:iconGravity="textStart"
+                        app:iconTint="@color/text_on_primary" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Setup -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="Setup"
+                android:textAppearance="@style/TextAppearance.SF.Overline" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.StreamForge.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:contentPadding="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/space_lg">
+
+                    <!-- Stream key -->
+                    <LinearLayout
+                        android:id="@+id/cardKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_youtube" />
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="YouTube stream key" android:textAppearance="@style/TextAppearance.SF.Label" />
+                            <TextView android:id="@+id/tvKeyStatus" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.SF.Caption" tools:text="Not set — tap to add" />
+                        </LinearLayout>
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                    <!-- Stream quality -->
+                    <LinearLayout
+                        android:id="@+id/cardQuality"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_video" app:tint="@color/text_secondary" />
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Stream settings" android:textAppearance="@style/TextAppearance.SF.Label" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Resolution, bitrate, microphone" android:textAppearance="@style/TextAppearance.SF.Caption" />
+                        </LinearLayout>
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+</LinearLayout>

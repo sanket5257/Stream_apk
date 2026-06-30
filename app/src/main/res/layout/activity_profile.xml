@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface_dark"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical"
+    tools:context=".ProfileActivity">
+
+    <!-- Back header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/space_sm"
+        android:paddingVertical="@dimen/space_sm">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="@dimen/touch_target_min"
+            android:layout_height="@dimen/touch_target_min"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Back"
+            android:src="@drawable/ic_chevron_left" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Profile"
+            android:textAppearance="@style/TextAppearance.SF.TitleLarge" />
+
+        <Space
+            android:layout_width="@dimen/touch_target_min"
+            android:layout_height="1dp" />
+
+    </LinearLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingHorizontal="@dimen/screen_margin"
+        android:paddingBottom="@dimen/space_2xl">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Identity header -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/ivAvatar"
+                    android:layout_width="84dp"
+                    android:layout_height="84dp"
+                    android:background="@color/surface_elevated"
+                    android:contentDescription="@null"
+                    android:padding="18dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_person"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.SF.Circle"
+                    app:tint="@color/text_secondary" />
+
+                <TextView
+                    android:id="@+id/tvUsername"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_md"
+                    android:textAppearance="@style/TextAppearance.SF.HeadlineLarge"
+                    tools:text="sanket" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xxs"
+                    android:text="StreamForge account"
+                    android:textAppearance="@style/TextAppearance.SF.BodyMedium" />
+
+            </LinearLayout>
+
+            <!-- Account -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_2xl"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="Account"
+                android:textAppearance="@style/TextAppearance.SF.Overline" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.StreamForge.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:contentPadding="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/space_lg">
+
+                    <!-- Username -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_person" app:tint="@color/text_secondary" />
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Username" android:textAppearance="@style/TextAppearance.SF.Label" />
+                            <TextView android:id="@+id/tvAccountUsername" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.SF.Caption" tools:text="sanket" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                    <!-- Device -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_devices" app:tint="@color/text_secondary" />
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="This device" android:textAppearance="@style/TextAppearance.SF.Label" />
+                            <TextView android:id="@+id/tvAccountDevice" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.SF.Caption" tools:text="Pixel 7" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Streaming -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="Streaming"
+                android:textAppearance="@style/TextAppearance.SF.Overline" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.StreamForge.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:contentPadding="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/space_lg">
+
+                    <!-- YouTube connection -->
+                    <LinearLayout
+                        android:id="@+id/rowYoutube"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_youtube" />
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="YouTube connection" android:textAppearance="@style/TextAppearance.SF.Label" />
+                            <TextView android:id="@+id/tvYoutubeState" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.SF.Caption" tools:text="Not connected" />
+                        </LinearLayout>
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                    <!-- Stream settings -->
+                    <LinearLayout
+                        android:id="@+id/rowStreamSettings"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_video" app:tint="@color/text_secondary" />
+
+                        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1"
+                            android:text="Stream settings" android:textAppearance="@style/TextAppearance.SF.Label" />
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- App -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="App"
+                android:textAppearance="@style/TextAppearance.SF.Overline" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.StreamForge.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:contentPadding="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/space_lg">
+
+                    <!-- Theme -->
+                    <LinearLayout
+                        android:id="@+id/rowTheme"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_palette" app:tint="@color/text_secondary" />
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Theme" android:textAppearance="@style/TextAppearance.SF.Label" />
+                            <TextView android:id="@+id/tvThemeState" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.SF.Caption" tools:text="System default" />
+                        </LinearLayout>
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                    <!-- About -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_info" app:tint="@color/text_secondary" />
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="StreamForge" android:textAppearance="@style/TextAppearance.SF.Label" />
+                            <TextView android:id="@+id/tvVersion" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.SF.Caption" tools:text="v0.1.0" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Log out -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLogout"
+                style="@style/Widget.StreamForge.Button.Outlined"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_2xl"
+                android:text="Log out"
+                android:textColor="@color/status_error"
+                app:icon="@drawable/ic_delete"
+                app:iconGravity="textStart"
+                app:iconTint="@color/status_error"
+                app:strokeColor="@color/status_error" />
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+</LinearLayout>

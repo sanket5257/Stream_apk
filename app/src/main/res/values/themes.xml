@@ -1,122 +1,239 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <style name="Theme.StreamForge" parent="Theme.Material3.Dark.NoActionBar">
-        <!-- Primary Brand Colors -->
-        <item name="colorPrimary">@color/brand_primary</item>
-        <item name="colorPrimaryVariant">@color/brand_primary_dark</item>
-        <item name="colorOnPrimary">@color/text_on_primary</item>
-        
-        <!-- Secondary Colors -->
+    <!-- =====================================================================
+         StreamForge Design System — THEME (Material 3, DayNight)
+         Light by default; values-night/colors.xml supplies dark values.
+         ===================================================================== -->
+
+    <style name="Theme.StreamForge" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Primary = reference action green (buttons, focused fields, selection) -->
+        <item name="colorPrimary">@color/action_green</item>
+        <item name="colorOnPrimary">@color/on_action</item>
+        <item name="colorPrimaryContainer">@color/action_green_container</item>
+        <item name="colorOnPrimaryContainer">@color/on_action_container</item>
+
+        <!-- Secondary / tertiary -->
         <item name="colorSecondary">@color/brand_secondary</item>
-        <item name="colorSecondaryVariant">@color/brand_secondary_dark</item>
         <item name="colorOnSecondary">@color/text_on_primary</item>
-        
-        <!-- Surface & Background -->
+        <item name="colorTertiary">@color/brand_primary</item>
+
+        <!-- Surface & background -->
         <item name="colorSurface">@color/surface_card</item>
         <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorSurfaceContainer">@color/surface_elevated</item>
+        <item name="colorSurfaceContainerHigh">@color/surface_elevated</item>
+        <item name="colorSurfaceContainerLow">@color/surface_card</item>
         <item name="android:colorBackground">@color/surface_dark</item>
         <item name="colorOnBackground">@color/text_primary</item>
-        
-        <!-- Error Colors -->
+        <item name="colorOutline">@color/outline</item>
+        <item name="colorOutlineVariant">@color/divider</item>
+
+        <!-- Error -->
         <item name="colorError">@color/status_error</item>
         <item name="colorOnError">@color/text_on_primary</item>
-        
-        <!-- Status & Navigation Bar -->
+
+        <!-- System bars -->
         <item name="android:statusBarColor">@color/surface_dark</item>
         <item name="android:navigationBarColor">@color/surface_dark</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="o">false</item>
-        
-        <!-- Material Components -->
+        <item name="android:windowLightStatusBar" tools:targetApi="m">@bool/light_system_bars</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o">@bool/light_system_bars</item>
+        <item name="android:windowBackground">@color/surface_dark</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <!-- Default component styles -->
         <item name="materialCardViewStyle">@style/Widget.StreamForge.Card</item>
         <item name="materialButtonStyle">@style/Widget.StreamForge.Button</item>
         <item name="textInputStyle">@style/Widget.StreamForge.TextInput</item>
-        
-        <!-- Typography -->
+
+        <!-- Shape scale -->
+        <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.SF.Small</item>
+        <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.SF.Medium</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.SF.Large</item>
+
+        <!-- Legacy text color attrs (kept for existing layouts) -->
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
         <item name="android:textColorTertiary">@color/text_tertiary</item>
-        
-        <!-- Window Properties -->
-        <item name="android:windowBackground">@color/surface_dark</item>
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
+    <!-- Immersive screens (camera / live). Edge-to-edge, dark-friendly. -->
     <style name="Theme.StreamForge.Fullscreen" parent="Theme.StreamForge">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowTranslucentNavigation">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
     </style>
-    
-    <!-- Custom Material Card Style -->
+
+    <!-- =====================================================================
+         SHAPE SCALE
+         ===================================================================== -->
+    <style name="ShapeAppearance.SF.Small" parent="ShapeAppearance.Material3.Corner.Small">
+        <item name="cornerSize">@dimen/radius_sm</item>
+    </style>
+    <style name="ShapeAppearance.SF.Medium" parent="ShapeAppearance.Material3.Corner.Medium">
+        <item name="cornerSize">@dimen/radius_md</item>
+    </style>
+    <style name="ShapeAppearance.SF.Large" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSize">@dimen/radius_lg</item>
+    </style>
+    <style name="ShapeAppearanceOverlay.SF.Circle" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
+    <!-- =====================================================================
+         CARDS
+         ===================================================================== -->
     <style name="Widget.StreamForge.Card" parent="Widget.Material3.CardView.Elevated">
         <item name="cardBackgroundColor">@color/surface_card</item>
-        <item name="cardCornerRadius">16dp</item>
-        <item name="cardElevation">8dp</item>
-        <item name="contentPadding">16dp</item>
-        <item name="strokeWidth">0dp</item>
-    </style>
-    
-    <!-- Custom Button Styles -->
-    <style name="Widget.StreamForge.Button" parent="Widget.Material3.Button">
-        <item name="cornerRadius">12dp</item>
-        <item name="android:textAllCaps">false</item>
-        <item name="android:textSize">16sp</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:paddingTop">14dp</item>
-        <item name="android:paddingBottom">14dp</item>
-        <item name="backgroundTint">@color/brand_primary</item>
+        <item name="cardCornerRadius">@dimen/radius_md</item>
+        <item name="cardElevation">@dimen/elevation_card</item>
+        <item name="contentPadding">@dimen/space_lg</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">@color/divider</item>
         <item name="rippleColor">@color/ripple_color</item>
     </style>
-    
-    <style name="Widget.StreamForge.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
-        <item name="cornerRadius">12dp</item>
-        <item name="android:textAllCaps">false</item>
-        <item name="android:textSize">16sp</item>
-        <item name="strokeColor">@color/brand_primary</item>
-        <item name="strokeWidth">2dp</item>
-        <item name="android:textColor">@color/brand_primary</item>
+
+    <!-- Tappable "action tile" for Home (Live / Pre-recorded / Schedule) -->
+    <style name="Widget.SF.Card.Action" parent="Widget.StreamForge.Card">
+        <item name="contentPadding">@dimen/space_md</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
     </style>
-    
+
+    <!-- Event row card -->
+    <style name="Widget.SF.Card.Event" parent="Widget.StreamForge.Card">
+        <item name="contentPadding">@dimen/space_md</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+    </style>
+
+    <!-- =====================================================================
+         BUTTONS
+         ===================================================================== -->
+    <style name="Widget.StreamForge.Button" parent="Widget.Material3.Button">
+        <item name="cornerRadius">@dimen/radius_sm</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textAppearance">@style/TextAppearance.SF.Label</item>
+        <item name="android:textColor">@color/text_on_primary</item>
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="iconPadding">@dimen/space_sm</item>
+        <item name="backgroundTint">@color/action_green</item>
+        <item name="rippleColor">@color/ripple_color</item>
+    </style>
+
+    <style name="Widget.StreamForge.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="cornerRadius">@dimen/radius_sm</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textAppearance">@style/TextAppearance.SF.Label</item>
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="strokeColor">@color/outline</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <style name="Widget.SF.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
+        <item name="cornerRadius">@dimen/radius_sm</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textAppearance">@style/TextAppearance.SF.Label</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+    </style>
+
+    <style name="Widget.SF.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textAppearance">@style/TextAppearance.SF.Label</item>
+    </style>
+
+    <!-- Primary CTA: Go Live -->
     <style name="Widget.StreamForge.Button.Live" parent="Widget.StreamForge.Button">
         <item name="backgroundTint">@color/status_live</item>
-        <item name="android:textSize">18sp</item>
-        <item name="icon">@android:drawable/presence_video_online</item>
+        <item name="android:textColor">@color/text_on_primary</item>
+        <item name="iconTint">@color/text_on_primary</item>
         <item name="iconGravity">textStart</item>
-        <item name="iconPadding">8dp</item>
     </style>
-    
-    <!-- Custom Text Input Style -->
+
+    <!-- Small pill button inside event cards ("Enter Studio") -->
+    <style name="Widget.SF.Button.Pill" parent="Widget.Material3.Button">
+        <item name="cornerRadius">@dimen/radius_pill</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textAppearance">@style/TextAppearance.SF.Label</item>
+        <item name="android:textColor">@color/text_on_primary</item>
+        <item name="android:minHeight">36dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="backgroundTint">@color/action_green</item>
+    </style>
+
+    <!-- =====================================================================
+         TEXT INPUTS
+         ===================================================================== -->
     <style name="Widget.StreamForge.TextInput" parent="Widget.Material3.TextInputLayout.OutlinedBox">
-        <item name="boxStrokeColor">@color/brand_primary</item>
-        <item name="boxStrokeWidth">2dp</item>
-        <item name="boxCornerRadiusTopStart">12dp</item>
-        <item name="boxCornerRadiusTopEnd">12dp</item>
-        <item name="boxCornerRadiusBottomStart">12dp</item>
-        <item name="boxCornerRadiusBottomEnd">12dp</item>
+        <item name="boxStrokeColor">@color/action_green</item>
+        <item name="boxStrokeWidth">1dp</item>
+        <item name="boxStrokeWidthFocused">2dp</item>
+        <item name="boxCornerRadiusTopStart">@dimen/radius_sm</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/radius_sm</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/radius_sm</item>
+        <item name="boxCornerRadiusBottomEnd">@dimen/radius_sm</item>
         <item name="hintTextColor">@color/text_secondary</item>
         <item name="android:textColorHint">@color/text_tertiary</item>
     </style>
-    
-    <!-- Toolbar Style -->
+
+    <!-- =====================================================================
+         STATUS CHIP (Scheduled / Live / Ended badges)
+         ===================================================================== -->
+    <style name="Widget.SF.Chip.Status" parent="Widget.Material3.Chip.Assist">
+        <item name="chipBackgroundColor">@color/surface_elevated</item>
+        <item name="chipCornerRadius">@dimen/radius_pill</item>
+        <item name="chipMinHeight">24dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.SF.Caption</item>
+        <item name="ensureMinTouchTargetSize">false</item>
+        <item name="chipStartPadding">@dimen/space_sm</item>
+        <item name="chipEndPadding">@dimen/space_sm</item>
+    </style>
+
+    <!-- =====================================================================
+         SEGMENTED TABS (Upcoming / Past)
+         ===================================================================== -->
+    <style name="Widget.SF.TabLayout" parent="Widget.Material3.TabLayout">
+        <item name="tabIndicatorColor">@color/brand_primary</item>
+        <item name="tabSelectedTextColor">@color/text_primary</item>
+        <item name="tabTextColor">@color/text_secondary</item>
+        <item name="tabTextAppearance">@style/TextAppearance.SF.Label</item>
+        <item name="tabRippleColor">@color/ripple_color</item>
+        <item name="android:background">@android:color/transparent</item>
+    </style>
+
+    <!-- =====================================================================
+         TOOLBAR
+         ===================================================================== -->
     <style name="Widget.StreamForge.Toolbar" parent="Widget.Material3.Toolbar">
         <item name="titleTextColor">@color/text_primary</item>
         <item name="subtitleTextColor">@color/text_secondary</item>
+        <item name="titleTextAppearance">@style/TextAppearance.SF.TitleLarge</item>
         <item name="android:background">@color/surface_dark</item>
-        <item name="android:elevation">0dp</item>
+        <item name="android:elevation">@dimen/elevation_none</item>
     </style>
-    
-    <!-- Bottom Sheet Style -->
+
+    <!-- =====================================================================
+         BOTTOM SHEET
+         ===================================================================== -->
     <style name="Widget.StreamForge.BottomSheet" parent="Widget.Material3.BottomSheet">
         <item name="shapeAppearanceOverlay">@style/ShapeAppearance.StreamForge.BottomSheet</item>
         <item name="backgroundTint">@color/surface_card</item>
     </style>
-    
+
     <style name="ShapeAppearance.StreamForge.BottomSheet" parent="">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSizeTopLeft">24dp</item>
-        <item name="cornerSizeTopRight">24dp</item>
+        <item name="cornerSizeTopLeft">@dimen/radius_xl</item>
+        <item name="cornerSizeTopRight">@dimen/radius_xl</item>
         <item name="cornerSizeBottomLeft">0dp</item>
         <item name="cornerSizeBottomRight">0dp</item>
     </style>

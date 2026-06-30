@@ -372,13 +372,13 @@ class StreamActivity : AppCompatActivity() {
         
         if (isMuted) {
             rtmpCamera.disableAudio()
-            binding.btnMuteToggle.text = getString(R.string.unmute)
-            binding.btnMuteToggle.setIconResource(android.R.drawable.ic_lock_silent_mode)
+            binding.btnMuteToggle.setIconResource(R.drawable.ic_mic_off)
+            binding.btnMuteToggle.contentDescription = getString(R.string.unmute)
             binding.audioLevelBar.progress = 0
         } else {
             rtmpCamera.enableAudio()
-            binding.btnMuteToggle.text = getString(R.string.mute)
-            binding.btnMuteToggle.setIconResource(android.R.drawable.ic_btn_speak_now)
+            binding.btnMuteToggle.setIconResource(R.drawable.ic_mic)
+            binding.btnMuteToggle.contentDescription = getString(R.string.mute)
         }
     }
 

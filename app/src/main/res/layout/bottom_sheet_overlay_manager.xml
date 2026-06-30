@@ -5,16 +5,15 @@
     android:layout_height="match_parent"
     android:background="@color/surface_card"
     android:orientation="vertical"
-    android:paddingTop="8dp">
+    android:paddingTop="@dimen/space_md">
 
-    <!-- Bottom Sheet Handle -->
+    <!-- Grab handle -->
     <View
-        android:layout_width="40dp"
+        android:layout_width="36dp"
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="16dp"
-        android:background="@color/divider"
-        android:alpha="0.6" />
+        android:layout_marginBottom="@dimen/space_md"
+        android:background="@drawable/bg_chip_segment" />
 
     <!-- Header -->
     <LinearLayout
@@ -22,176 +21,231 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:paddingBottom="16dp">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@android:drawable/ic_menu_gallery"
-            app:tint="@color/brand_primary" />
+        android:paddingStart="@dimen/screen_margin"
+        android:paddingEnd="@dimen/space_sm"
+        android:paddingBottom="@dimen/space_sm">
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="12dp"
             android:text="@string/manage_overlays"
-            android:textColor="@color/text_primary"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:fontFamily="sans-serif-medium" />
+            android:textAppearance="@style/TextAppearance.SF.TitleLarge" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnClose"
             style="@style/Widget.Material3.Button.IconButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:contentDescription="@string/close"
-            app:icon="@android:drawable/ic_menu_close_clear_cancel"
+            app:icon="@drawable/ic_close"
             app:iconTint="@color/text_secondary" />
+
     </LinearLayout>
 
-    <!-- Add Overlay Buttons Section -->
-    <com.google.android.material.card.MaterialCardView
+    <!-- Compact add row: Image / Text / GIF / Video / URL -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="16dp"
-        app:cardBackgroundColor="@color/surface_elevated"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="0dp"
-        app:contentPadding="16dp">
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/space_sm"
+        android:paddingBottom="@dimen/space_md">
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:id="@+id/btnAddImage"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingVertical="@dimen/space_sm">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_chip_segment">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_image"
+                    app:tint="@color/action_green" />
+            </FrameLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Add New Overlay"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_primary"
-                android:layout_marginBottom="12dp"
-                android:fontFamily="sans-serif-medium" />
-
-    <!-- Add buttons row 1: Image + Text -->
-    <LinearLayout
-        android:id="@+id/addButtonsRow1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingBottom="8dp">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAddImage"
-            style="@style/Widget.Material3.Button.TonalButton.Icon"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_weight="1"
-            android:text="@string/add_image"
-            android:textSize="13sp"
-            app:cornerRadius="12dp"
-            app:icon="@android:drawable/ic_menu_gallery"
-            app:iconSize="20dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAddText"
-            style="@style/Widget.Material3.Button.TonalButton.Icon"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:text="@string/add_text"
-            android:textSize="13sp"
-            app:cornerRadius="12dp"
-            app:icon="@android:drawable/ic_menu_edit"
-            app:iconSize="20dp" />
-    </LinearLayout>
-
-    <!-- Add buttons row 2: GIF + Video -->
-    <LinearLayout
-        android:id="@+id/addButtonsRow2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingBottom="8dp">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAddGif"
-            style="@style/Widget.Material3.Button.TonalButton.Icon"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_weight="1"
-            android:text="@string/add_gif"
-            android:textSize="13sp"
-            app:cornerRadius="12dp"
-            app:icon="@android:drawable/ic_menu_slideshow"
-            app:iconSize="20dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAddVideo"
-            style="@style/Widget.Material3.Button.TonalButton.Icon"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:text="@string/add_video"
-            android:textSize="13sp"
-            app:cornerRadius="12dp"
-            app:icon="@android:drawable/ic_media_play"
-            app:iconSize="20dp" />
-    </LinearLayout>
-
-    <!-- Add buttons row 3: URL / browser overlay -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnAddUrl"
-        style="@style/Widget.Material3.Button.TonalButton.Icon"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/add_url"
-        android:textSize="13sp"
-        app:cornerRadius="12dp"
-        app:icon="@android:drawable/ic_menu_compass"
-        app:iconSize="20dp" />
-
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="Image"
+                android:textAppearance="@style/TextAppearance.SF.Caption" />
         </LinearLayout>
 
-    </com.google.android.material.card.MaterialCardView>
+        <LinearLayout
+            android:id="@+id/btnAddText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingVertical="@dimen/space_sm">
 
-    <!-- Overlay List Header -->
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_chip_segment">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_text"
+                    app:tint="@color/action_green" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="Text"
+                android:textAppearance="@style/TextAppearance.SF.Caption" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnAddGif"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingVertical="@dimen/space_sm">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_chip_segment">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_gif"
+                    app:tint="@color/action_green" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="GIF"
+                android:textAppearance="@style/TextAppearance.SF.Caption" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnAddVideo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingVertical="@dimen/space_sm">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_chip_segment">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_video"
+                    app:tint="@color/action_green" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="Video"
+                android:textAppearance="@style/TextAppearance.SF.Caption" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnAddUrl"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingVertical="@dimen/space_sm">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_chip_segment">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_link"
+                    app:tint="@color/action_green" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="URL"
+                android:textAppearance="@style/TextAppearance.SF.Caption" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginHorizontal="@dimen/screen_margin"
+        android:background="@color/divider" />
+
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginBottom="12dp"
-        android:text="Active Overlays"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:textColor="@color/text_primary"
-        android:fontFamily="sans-serif-medium" />
+        android:layout_marginStart="@dimen/screen_margin"
+        android:layout_marginTop="@dimen/space_md"
+        android:layout_marginBottom="@dimen/space_sm"
+        android:text="Active overlays"
+        android:textAppearance="@style/TextAppearance.SF.Overline" />
 
-    <!-- Overlay list -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvOverlays"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="16dp"
-        android:scrollbars="vertical"
-        android:fadeScrollbars="false"
+        android:paddingHorizontal="@dimen/screen_margin"
+        android:paddingBottom="@dimen/space_lg"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
     <!-- Empty state -->
@@ -202,25 +256,24 @@
         android:layout_weight="1"
         android:gravity="center"
         android:orientation="vertical"
-        android:padding="32dp"
+        android:padding="@dimen/space_3xl"
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:src="@android:drawable/ic_menu_gallery"
-            android:alpha="0.3"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:alpha="0.4"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_layers"
             app:tint="@color/text_tertiary" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/space_lg"
             android:text="@string/no_overlays"
             android:textAlignment="center"
-            android:textColor="@color/text_secondary"
-            android:textSize="16sp"
-            android:lineSpacingExtra="4dp" />
+            android:textAppearance="@style/TextAppearance.SF.BodyMedium" />
 
     </LinearLayout>
 

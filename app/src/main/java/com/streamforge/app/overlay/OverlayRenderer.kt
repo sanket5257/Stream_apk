@@ -457,6 +457,14 @@ class OverlayRenderer(
 
     private fun applyTransform(filter: BaseFilterRender, item: OverlayItem) {
         if (filter !is BaseObjectFilterRender) return
+        // Browser/URL overlays are a full-canvas layer — always edge-to-edge. Its page
+        // content is fit to the full frame in BrowserOverlaySource, so the quad is just 100%.
+        if (item is OverlayItem.Browser) {
+            filter.setPosition(0f, 0f)
+            filter.setScale(100f, 100f)
+            filter.setRotation(0)
+            return
+        }
         // Width as a percent of the stream width: scale=1.0 → 20% wide.
         val widthPercent = 20f * item.scale
         // Height as an INDEPENDENT percent of the stream height (driven by heightScale).
@@ -521,11 +529,13 @@ class OverlayRenderer(
     }
 
     private fun buildBrowserFilter(item: OverlayItem.Browser): BaseObjectFilterRender {
-        val source = BrowserOverlaySource(uiContext, item.url, item.renderWidth, item.renderHeight)
+        // Supersample: render the web overlay well ABOVE the output resolution so a sub-1080p
+        // StreamElements canvas (e.g. 1280×720) is rasterized at high resolution after the
+        // scale-to-fill, then the GPU cleanly downscales to the stream — keeping vector content
+        // (text, ticker, shapes) crisp. 1440p is a good quality/performance balance.
+        val source = BrowserOverlaySource(uiContext, item.url, BROWSER_RENDER_W, BROWSER_RENDER_H)
         browserSources[item.id] = source
-        if (item.renderHeight > 0) {
-            contentAspect[item.id] = item.renderWidth.toFloat() / item.renderHeight
-        }
+        contentAspect[item.id] = BROWSER_RENDER_W.toFloat() / BROWSER_RENDER_H
         return source.filter
     }
 
@@ -550,7 +560,7 @@ class OverlayRenderer(
         val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, boundsOpts) }
         val opts = BitmapFactory.Options().apply {
-            inSampleSize = calcSampleSize(boundsOpts.outWidth, boundsOpts.outHeight, MAX_OVERLAY_EDGE_PX)
+            inSampleSize = calcSampleSize(boundsOpts.outWidth, boundsOpts.outHeight, maxOverlayEdgePx())
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
         context.contentResolver.openInputStream(uri).use { stream ->
@@ -559,6 +569,15 @@ class OverlayRenderer(
     } catch (_: Exception) {
         null
     }
+
+    /**
+     * Largest texture edge we keep for image overlays. Sized to ~2× the output's long edge so
+     * an overlay stays pixel-sharp even scaled to full width (a texture bigger than the on-
+     * screen box only ever downscales — never blurs). Capped at 4096 to stay within typical GL
+     * texture limits / memory.
+     */
+    private fun maxOverlayEdgePx(): Int =
+        (maxOf(streamWidth, streamHeight) * 2).coerceIn(2048, 4096)
 
     private fun calcSampleSize(srcW: Int, srcH: Int, maxEdge: Int): Int {
         if (srcW <= 0 || srcH <= 0) return 1
@@ -569,14 +588,17 @@ class OverlayRenderer(
     }
 
     private companion object {
-        const val MAX_OVERLAY_EDGE_PX = 1024
+        // Web/URL overlay supersample resolution (downscaled to the stream by the GPU).
+        const val BROWSER_RENDER_W = 2560
+        const val BROWSER_RENDER_H = 1440
 
         // Text overlays are rendered to a bitmap at this multiple of their on-screen point
         // size (× display density), then GPU-scaled into the overlay box. Rendering well
         // above display size keeps glyphs sharp — Devanagari/Marathi conjuncts especially.
-        const val TEXT_QUALITY_MULTIPLIER = 2.5f
-        const val MIN_TEXT_RENDER_PX = 72f
-        const val MAX_TEXT_RENDER_PX = 320f
+        // High caps so even large text stays razor-sharp.
+        const val TEXT_QUALITY_MULTIPLIER = 3.0f
+        const val MIN_TEXT_RENDER_PX = 96f
+        const val MAX_TEXT_RENDER_PX = 640f
 
         // Self-heal sweep: re-reconcile at t = 300ms and 600ms after each change.
         // Bounded (no infinite loop); reconcile is idempotent for already-attached

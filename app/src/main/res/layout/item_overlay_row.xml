@@ -1,171 +1,128 @@
 <?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/Widget.StreamForge.Card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="12dp"
-    app:cardBackgroundColor="@color/surface_elevated"
-    app:cardElevation="4dp"
-    app:cardCornerRadius="16dp"
-    app:strokeWidth="1dp"
-    app:strokeColor="#26FFFFFF">
+    android:layout_marginBottom="@dimen/space_md"
+    app:contentPadding="@dimen/space_md">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="vertical">
 
-        <!-- Top row: thumbnail, info, actions -->
+        <!-- Top row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-            <!-- Thumbnail/Icon with Border -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                app:cardBackgroundColor="@color/surface_card"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="2dp"
-                app:strokeColor="@color/brand_primary">
+            <ImageView
+                android:id="@+id/ivDragHandle"
+                android:layout_width="28dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="@dimen/space_xs"
+                android:contentDescription="Drag to reorder"
+                android:scaleType="center"
+                android:src="@drawable/ic_drag" />
 
-                <ImageView
-                    android:id="@+id/ivOverlayIcon"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:padding="8dp"
-                    android:scaleType="centerCrop"
-                    android:contentDescription="@string/overlay_icon" />
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/ivOverlayIcon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_thumb_placeholder"
+                android:contentDescription="@string/overlay_icon"
+                android:padding="@dimen/space_sm"
+                android:scaleType="centerCrop"
+                app:shapeAppearance="@style/ShapeAppearance.SF.Small" />
 
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Overlay Info -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_md"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:layout_marginStart="16dp">
+                android:orientation="vertical">
 
                 <TextView
                     android:id="@+id/tvOverlayName"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="17sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary"
-                    android:fontFamily="sans-serif-medium" />
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textAppearance="@style/TextAppearance.SF.TitleMedium" />
 
                 <TextView
                     android:id="@+id/tvOverlayDetails"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginTop="4dp"
-                    android:fontFamily="sans-serif" />
+                    android:layout_marginTop="@dimen/space_xxs"
+                    android:textAppearance="@style/TextAppearance.SF.Caption" />
+
             </LinearLayout>
 
-            <!-- Action Buttons -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-            <!-- Bring forward -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnMoveUp"
-                style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="40dp"
-                android:layout_height="48dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:contentDescription="@string/overlay_move_up"
-                app:icon="@android:drawable/arrow_up_float"
-                app:iconTint="@color/brand_primary"
-                app:iconSize="20dp" />
-
-            <!-- Send backward -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnMoveDown"
-                style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="40dp"
-                android:layout_height="48dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:contentDescription="@string/overlay_move_down"
-                app:icon="@android:drawable/arrow_down_float"
-                app:iconTint="@color/brand_primary"
-                app:iconSize="20dp" />
-
-            <!-- Visibility Toggle -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnToggleVisibility"
                 style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:contentDescription="@string/toggle_visibility"
-                app:icon="@android:drawable/ic_menu_view"
-                app:iconTint="@color/status_success"
-                app:iconSize="22dp" />
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_visibility"
+                app:iconSize="20dp"
+                app:iconTint="@color/action_green" />
 
-            <!-- Delete Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnDelete"
                 style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:contentDescription="@string/delete_overlay"
-                app:icon="@android:drawable/ic_menu_delete"
-                app:iconTint="@color/status_error"
-                app:iconSize="22dp" />
-
-            </LinearLayout>
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_delete"
+                app:iconSize="20dp"
+                app:iconTint="@color/status_error" />
 
         </LinearLayout>
 
-        <!-- Size controls: Width and Height -->
+        <!-- Size controls -->
         <LinearLayout
             android:id="@+id/sizeControls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:background="@drawable/bg_thumb_placeholder"
             android:orientation="vertical"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bg_card_elevated"
-            android:padding="12dp">
+            android:padding="@dimen/space_md">
 
-            <!-- Width row -->
+            <!-- Width -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="8dp">
+                android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tvWidthLabel"
-                    android:layout_width="60dp"
+                    android:layout_width="56dp"
                     android:layout_height="wrap_content"
                     android:text="@string/overlay_width_label"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:textAppearance="@style/TextAppearance.SF.Label" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnWidthDown"
                     style="@style/Widget.Material3.Button.IconButton"
                     android:layout_width="36dp"
                     android:layout_height="36dp"
+                    android:contentDescription="@string/overlay_width_decrease"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    android:contentDescription="@string/overlay_width_decrease"
-                    app:icon="@android:drawable/ic_input_delete"
-                    app:iconTint="@color/brand_primary"
-                    app:iconSize="18dp" />
+                    app:icon="@drawable/ic_remove"
+                    app:iconSize="18dp"
+                    app:iconTint="@color/text_primary" />
 
                 <SeekBar
                     android:id="@+id/seekWidth"
@@ -173,49 +130,49 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:max="100"
-                    android:progressTint="@color/brand_primary"
-                    android:thumbTint="@color/brand_primary"
-                    android:progressBackgroundTint="@color/divider" />
+                    android:progressBackgroundTint="@color/divider"
+                    android:progressTint="@color/action_green"
+                    android:thumbTint="@color/action_green" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnWidthUp"
                     style="@style/Widget.Material3.Button.IconButton"
                     android:layout_width="36dp"
                     android:layout_height="36dp"
+                    android:contentDescription="@string/overlay_width_increase"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    android:contentDescription="@string/overlay_width_increase"
-                    app:icon="@android:drawable/ic_input_add"
-                    app:iconTint="@color/brand_primary"
-                    app:iconSize="18dp" />
+                    app:icon="@drawable/ic_add"
+                    app:iconSize="18dp"
+                    app:iconTint="@color/text_primary" />
+
             </LinearLayout>
 
-            <!-- Height row -->
+            <!-- Height -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:layout_marginTop="@dimen/space_sm"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
-                    android:layout_width="60dp"
+                    android:layout_width="56dp"
                     android:layout_height="wrap_content"
                     android:text="@string/overlay_height_label"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:textAppearance="@style/TextAppearance.SF.Label" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnHeightDown"
                     style="@style/Widget.Material3.Button.IconButton"
                     android:layout_width="36dp"
                     android:layout_height="36dp"
+                    android:contentDescription="@string/overlay_height_decrease"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    android:contentDescription="@string/overlay_height_decrease"
-                    app:icon="@android:drawable/ic_input_delete"
-                    app:iconTint="@color/brand_primary"
-                    app:iconSize="18dp" />
+                    app:icon="@drawable/ic_remove"
+                    app:iconSize="18dp"
+                    app:iconTint="@color/text_primary" />
 
                 <SeekBar
                     android:id="@+id/seekHeight"
@@ -223,22 +180,26 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:max="100"
-                    android:progressTint="@color/brand_primary"
-                    android:thumbTint="@color/brand_primary"
-                    android:progressBackgroundTint="@color/divider" />
+                    android:progressBackgroundTint="@color/divider"
+                    android:progressTint="@color/action_green"
+                    android:thumbTint="@color/action_green" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnHeightUp"
                     style="@style/Widget.Material3.Button.IconButton"
                     android:layout_width="36dp"
                     android:layout_height="36dp"
+                    android:contentDescription="@string/overlay_height_increase"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    android:contentDescription="@string/overlay_height_increase"
-                    app:icon="@android:drawable/ic_input_add"
-                    app:iconTint="@color/brand_primary"
-                    app:iconSize="18dp" />
+                    app:icon="@drawable/ic_add"
+                    app:iconSize="18dp"
+                    app:iconTint="@color/text_primary" />
+
             </LinearLayout>
+
         </LinearLayout>
+
     </LinearLayout>
+
 </com.google.android.material.card.MaterialCardView>

@@ -6,7 +6,7 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.streamforge.app.MainActivity
+import com.streamforge.app.HomeActivity
 import com.streamforge.app.databinding.ActivityLoginBinding
 import kotlinx.coroutines.launch
 
@@ -217,7 +217,7 @@ class LoginActivity : AppCompatActivity() {
     }
     
     private fun navigateToMain() {
-        startActivity(Intent(this, MainActivity::class.java))
+        startActivity(Intent(this, HomeActivity::class.java))
         finish()
     }
     

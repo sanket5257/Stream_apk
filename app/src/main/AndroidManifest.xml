@@ -48,6 +48,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Home / landing (post-login) -->
+        <activity
+            android:name=".HomeActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Profile / account -->
+        <activity
+            android:name=".ProfileActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Advanced RTMP/quality config + go-live entry (existing pipeline) -->
         <activity
             android:name=".MainActivity"
             android:exported="false"

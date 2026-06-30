@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- =====================================================================
+         StreamForge Design System — TYPOGRAPHY (Material 3 type scale)
+         Apply via android:textAppearance="@style/TextAppearance.SF.*"
+         ===================================================================== -->
+
+    <style name="TextAppearance.SF.Display" parent="TextAppearance.Material3.HeadlineLarge">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">32sp</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <style name="TextAppearance.SF.HeadlineLarge" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">24sp</item>
+    </style>
+
+    <style name="TextAppearance.SF.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">20sp</item>
+    </style>
+
+    <style name="TextAppearance.SF.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <!-- Section label above lists/cards (e.g. "Events") -->
+    <style name="TextAppearance.SF.Overline" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <style name="TextAppearance.SF.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <style name="TextAppearance.SF.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+
+    <style name="TextAppearance.SF.Caption" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textColor">@color/text_tertiary</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="TextAppearance.SF.Label" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+</resources>
