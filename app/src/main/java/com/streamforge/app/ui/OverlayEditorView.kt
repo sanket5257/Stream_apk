@@ -226,7 +226,10 @@ class OverlayEditorView @JvmOverloads constructor(
         // against each overlay's actual rendered rectangle (rotated to match), not a uniform
         // circle — so a wide/thin ticker no longer swallows touches meant for nearby overlays.
         val hitItem = items.sortedByDescending { it.zIndex }
-            .filter { it.visible && it !is OverlayItem.Browser }
+            // Locked overlays ignore touch: they can't be selected, moved, scaled or rotated,
+            // so a dialed-in layout stays put while live. Browser overlays are always locked
+            // full-frame.
+            .filter { it.visible && !it.locked && it !is OverlayItem.Browser }
             .firstOrNull { item -> hitTest(item, x, y) }
 
         selectedId = hitItem?.id

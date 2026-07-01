@@ -24,6 +24,7 @@
     <string name="video_bitrate_label">Video Bitrate: %d kbps</string>
     <string name="audio_bitrate_label">Audio Bitrate: %d kbps</string>
     <string name="save_and_go_live">Save &amp; Go Live</string>
+    <string name="save_settings">Save Settings</string>
     <string name="error_empty_url">RTMP URL cannot be empty</string>
     <string name="error_invalid_url">URL must start with rtmp:// or rtmps://</string>
     <string name="error_empty_key">Stream key cannot be empty</string>
@@ -59,8 +60,12 @@
     <string name="add_url">Add URL / Browser overlay</string>
     <string name="url_overlay_hint">https://… (e.g. StreamElements overlay URL)</string>
     <string name="url_overlay_invalid">Enter a valid URL</string>
+    <string name="overlay_update_failed">Couldn\'t update overlay. Please try again.</string>
+    <string name="overlay_lock">Lock overlay</string>
+    <string name="overlay_unlock">Unlock overlay</string>
     <string name="overlay_icon">Overlay icon</string>
     <string name="toggle_visibility">Toggle visibility</string>
+    <string name="overlay_adjust_size">Adjust size</string>
     <string name="delete_overlay">Delete overlay</string>
     <string name="overlay_move_up">Bring forward</string>
     <string name="overlay_move_down">Send backward</string>

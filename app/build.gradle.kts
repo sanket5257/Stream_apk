@@ -65,8 +65,10 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Minification disabled for now: guarantees Supabase/ktor/serialization work in
+            // the distributable without device-tested R8 keep rules. Re-enable once verified.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

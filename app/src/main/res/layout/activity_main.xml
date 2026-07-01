@@ -52,90 +52,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_xs"
-                android:text="Advanced connection and quality options"
+                android:text="Video quality for your YouTube stream"
                 android:textAppearance="@style/TextAppearance.SF.BodyMedium" />
-
-            <!-- Connection card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/streamSettingsCard"
-                style="@style/Widget.StreamForge.Card"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_xl"
-                app:contentPadding="@dimen/space_xl">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="@dimen/space_lg"
-                        android:text="Connection"
-                        android:textAppearance="@style/TextAppearance.SF.TitleMedium" />
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilRtmpUrl"
-                        style="@style/Widget.StreamForge.TextInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="@string/rtmp_url_label"
-                        app:errorEnabled="true"
-                        app:helperText="Your primary streaming server">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etRtmpUrl"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textUri"
-                            android:singleLine="true" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilStreamKey"
-                        style="@style/Widget.StreamForge.TextInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_lg"
-                        android:hint="@string/stream_key_label"
-                        app:endIconMode="password_toggle"
-                        app:errorEnabled="true"
-                        app:helperText="Keep this private and secure">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etStreamKey"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textPassword"
-                            android:singleLine="true" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilBackupRtmpUrl"
-                        style="@style/Widget.StreamForge.TextInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_lg"
-                        android:hint="@string/backup_rtmp_url_label"
-                        app:errorEnabled="true"
-                        app:helperText="Failover server (optional)">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etBackupRtmpUrl"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textUri"
-                            android:singleLine="true" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
 
             <!-- Quality card -->
             <com.google.android.material.card.MaterialCardView
@@ -263,20 +181,16 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Save & Go Live -->
+            <!-- Save settings -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSaveAndGoLive"
                 style="@style/Widget.StreamForge.Button.Live"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_2xl"
-                android:text="@string/save_and_go_live"
+                android:text="@string/save_settings"
                 android:textColor="@color/text_on_primary"
-                app:cornerRadius="@dimen/radius_sm"
-                app:icon="@drawable/ic_live_dot"
-                app:iconGravity="textStart"
-                app:iconPadding="@dimen/space_sm"
-                app:iconTint="@color/text_on_primary" />
+                app:cornerRadius="@dimen/radius_sm" />
 
         </LinearLayout>
 

@@ -4,8 +4,8 @@
     style="@style/Widget.StreamForge.Card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="@dimen/space_md"
-    app:contentPadding="@dimen/space_md">
+    android:layout_marginBottom="@dimen/space_sm"
+    app:contentPadding="@dimen/space_sm">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -75,6 +75,30 @@
                 app:iconTint="@color/action_green" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnToggleLock"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:contentDescription="@string/overlay_lock"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_lock_open"
+                app:iconSize="20dp"
+                app:iconTint="@color/text_secondary" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnExpandSize"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:contentDescription="@string/overlay_adjust_size"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_arrow_down"
+                app:iconSize="20dp"
+                app:iconTint="@color/text_secondary" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnDelete"
                 style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="40dp"
@@ -96,7 +120,8 @@
             android:layout_marginTop="@dimen/space_md"
             android:background="@drawable/bg_thumb_placeholder"
             android:orientation="vertical"
-            android:padding="@dimen/space_md">
+            android:padding="@dimen/space_md"
+            android:visibility="gone">
 
             <!-- Width -->
             <LinearLayout

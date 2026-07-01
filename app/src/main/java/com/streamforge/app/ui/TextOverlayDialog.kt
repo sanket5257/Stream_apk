@@ -19,9 +19,13 @@ import com.streamforge.app.overlay.OverlayItem
 import java.util.UUID
 
 /**
- * Phase 5B + 7 polish: dialog for creating or editing a text overlay.
- * User picks text content, font size (12–96 sp via slider OR numeric input),
- * and a color (12 preset swatches OR custom hex code).
+ * Dialog for creating or editing a text overlay.
+ * User picks text content, font family, color (12 preset swatches OR custom hex code),
+ * and scroll mode. Text SIZE is not set here — the renderer sizes text by the overlay's
+ * [OverlayItem.scale], which the user adjusts with the "Size" slider on the overlay list
+ * or by pinching on the preview. A single size model avoids the old three-way confusion
+ * where a font-size control did nothing on screen. [RENDER_SP] is a fixed internal value
+ * that only governs render sharpness.
  */
 class TextOverlayDialog : DialogFragment() {
 
@@ -62,15 +66,12 @@ class TextOverlayDialog : DialogFragment() {
 
         existing?.let { item ->
             binding.etText.setText(item.text)
-            binding.sliderFontSize.value = item.fontSizeSp.coerceIn(12f, 96f)
-            binding.etFontSize.setText(item.fontSizeSp.toInt().toString())
             binding.switchScroll.isChecked = item.scroll
         }
 
         // Pre-fill hex field from the current color.
         binding.etHex.setText(formatHex(selectedColor))
 
-        bindFontSize(binding)
         bindFontFamily(binding)
         buildSwatches(binding, density)
         bindHexInput(binding)
@@ -81,12 +82,11 @@ class TextOverlayDialog : DialogFragment() {
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val typed = binding.etText.text?.toString()?.takeIf { it.isNotBlank() }
                     ?: getString(R.string.default_text_overlay)
-                val finalSize = binding.sliderFontSize.value
                 val fontKey = OverlayFonts.keyForLabel(binding.actvFont.text?.toString())
                 val result = OverlayItem.Text(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     text = typed,
-                    fontSizeSp = finalSize,
+                    fontSizeSp = existing?.fontSizeSp ?: RENDER_SP,
                     colorArgb = selectedColor,
                     fontKey = fontKey,
                     scroll = binding.switchScroll.isChecked,
@@ -101,33 +101,6 @@ class TextOverlayDialog : DialogFragment() {
             }
             .setNegativeButton(android.R.string.cancel, null)
             .create()
-    }
-
-    /** Keep the numeric input box and the slider in sync; both clamp to 12..96. */
-    private fun bindFontSize(binding: DialogTextOverlayBinding) {
-        var updatingFromCode = false
-
-        binding.sliderFontSize.addOnChangeListener { _, value, _ ->
-            if (updatingFromCode) return@addOnChangeListener
-            updatingFromCode = true
-            binding.etFontSize.setText(value.toInt().toString())
-            updatingFromCode = false
-        }
-
-        binding.etFontSize.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (updatingFromCode) return
-                val n = s?.toString()?.toIntOrNull() ?: return
-                val clamped = n.coerceIn(12, 96)
-                updatingFromCode = true
-                if (binding.sliderFontSize.value.toInt() != clamped) {
-                    binding.sliderFontSize.value = clamped.toFloat()
-                }
-                updatingFromCode = false
-            }
-        })
     }
 
     /** Populate the font dropdown and preselect the existing overlay's font (or default). */
@@ -231,5 +204,13 @@ class TextOverlayDialog : DialogFragment() {
 
     companion object {
         const val TAG = "TextOverlayDialog"
+
+        /**
+         * Fixed point size text is rendered at. It does NOT control on-screen size (the
+         * renderer scales the text bitmap to the overlay box driven by [OverlayItem.scale]);
+         * it only sets the rasterization resolution, kept high so glyphs stay crisp when
+         * scaled up. New text overlays use this; edited ones keep their stored value.
+         */
+        const val RENDER_SP = 48f
     }
 }

@@ -57,7 +57,6 @@ class MainActivity : AppCompatActivity() {
         setupBitrateSliders()
         setupMicDropdown()
         setupSaveButton()
-        setupDevMenu()
     }
     
     private fun setupToolbar() {
@@ -170,18 +169,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupSaveButton() {
         binding.btnSaveAndGoLive.setOnClickListener {
-            if (validateInputs()) {
-                saveConfigAndLaunchStream()
-            }
-        }
-    }
-
-    private fun setupDevMenu() {
-        // Long-press on welcome text to open overlay test activity (dev feature)
-        binding.tvWelcome.setOnLongClickListener {
-            startActivity(Intent(this, OverlayTestActivity::class.java))
-            Toast.makeText(this, "Opening Overlay Test", Toast.LENGTH_SHORT).show()
-            true
+            saveConfig()
         }
     }
 
@@ -189,11 +177,6 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val config = streamPrefs.load()
-                
-                // Populate form with saved values
-                binding.etRtmpUrl.setText(config.rtmpUrl)
-                binding.etStreamKey.setText(config.streamKey)
-                binding.etBackupRtmpUrl.setText(config.backupRtmpUrl)
 
                 // Mic source — fall back to "Default" if the saved device is gone.
                 val micIndex = micOptions.indexOfFirst { it.deviceId == config.preferredMicId }
@@ -223,40 +206,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun validateInputs(): Boolean {
-        var isValid = true
-
-        // Validate RTMP URL
-        val url = binding.etRtmpUrl.text.toString().trim()
-        when {
-            url.isEmpty() -> {
-                binding.tilRtmpUrl.error = getString(R.string.error_empty_url)
-                isValid = false
-            }
-            !url.startsWith("rtmp://") && !url.startsWith("rtmps://") -> {
-                binding.tilRtmpUrl.error = getString(R.string.error_invalid_url)
-                isValid = false
-            }
-            else -> {
-                binding.tilRtmpUrl.error = null
-            }
-        }
-
-        // Validate stream key
-        val key = binding.etStreamKey.text.toString().trim()
-        if (key.isEmpty()) {
-            binding.tilStreamKey.error = getString(R.string.error_empty_key)
-            isValid = false
-        } else {
-            binding.tilStreamKey.error = null
-        }
-
-        return isValid
-    }
-
-    private fun saveConfigAndLaunchStream() {
+    /**
+     * Persist quality settings only. The YouTube connection (ingest URL + stream key) is
+     * managed separately via [YoutubeKeyDialog] and hardcoded to YouTube's ingest, so we
+     * load the current config and preserve those fields rather than exposing them here.
+     */
+    private fun saveConfig() {
         lifecycleScope.launch {
             try {
+                val current = streamPrefs.load()
+
                 // Get selected resolution
                 val selectedResolutionLabel = binding.actvResolution.text.toString()
                 val resolution = resolutions.find { it.label == selectedResolutionLabel }
@@ -266,27 +225,20 @@ class MainActivity : AppCompatActivity() {
                 val micLabel = binding.actvMicSource.text.toString()
                 val micId = micOptions.firstOrNull { it.label == micLabel }?.deviceId ?: 0
 
-                // Build config
-                val config = StreamConfig(
-                    rtmpUrl = binding.etRtmpUrl.text.toString().trim(),
-                    streamKey = binding.etStreamKey.text.toString().trim(),
+                // Preserve the YouTube ingest URL + key; only update quality fields.
+                val config = current.copy(
+                    rtmpUrl = current.rtmpUrl.ifBlank { StreamConfig.DEFAULT.rtmpUrl },
                     width = resolution.width,
                     height = resolution.height,
                     fps = 30,
                     videoBitrateKbps = binding.sliderVideoBitrate.value.toInt(),
                     audioBitrateKbps = binding.sliderAudioBitrate.value.toInt(),
-                    backupRtmpUrl = binding.etBackupRtmpUrl.text.toString().trim(),
                     preferredMicId = micId
                 )
 
-                // Save config
                 streamPrefs.save(config)
-                
                 Toast.makeText(this@MainActivity, R.string.config_saved, Toast.LENGTH_SHORT).show()
-
-                // Launch stream activity
-                startActivity(Intent(this@MainActivity, StreamActivity::class.java))
-                
+                finish()
             } catch (e: Throwable) {
                 android.util.Log.e("MainActivity", "Error saving config", e)
                 val detail = e.message ?: e.javaClass.simpleName

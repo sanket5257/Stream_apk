@@ -149,14 +149,19 @@ class OverlayRenderer(
             .forEach { pendingLoads.remove(it)?.cancel() }
 
         visible.sortedBy { it.zIndex }.forEach { item ->
-            if (filters.containsKey(item.id)) {
-                android.util.Log.d("OverlayRenderer", "Updating existing overlay ${item.id}")
-                updateOverlay(item)
-                // Heal a possibly-blank first texture upload, once per attach.
-                if (forceTextureReload) healTextureOnce(item)
-            } else {
-                android.util.Log.d("OverlayRenderer", "Adding new overlay ${item.id} (type: ${item::class.simpleName})")
-                addOverlay(item)
+            try {
+                if (filters.containsKey(item.id)) {
+                    android.util.Log.d("OverlayRenderer", "Updating existing overlay ${item.id}")
+                    updateOverlay(item)
+                    // Heal a possibly-blank first texture upload, once per attach.
+                    if (forceTextureReload) healTextureOnce(item)
+                } else {
+                    android.util.Log.d("OverlayRenderer", "Adding new overlay ${item.id} (type: ${item::class.simpleName})")
+                    addOverlay(item)
+                }
+            } catch (e: Exception) {
+                // Isolate per-overlay failures so one bad item can't crash the whole apply.
+                android.util.Log.e("OverlayRenderer", "Failed to reconcile overlay ${item.id}", e)
             }
         }
         android.util.Log.d("OverlayRenderer", "applyOverlays complete. Filters: ${filters.size}, Bitmaps cached: ${bitmaps.size}, GIFs cached: ${gifBytes.size}")
@@ -216,10 +221,16 @@ class OverlayRenderer(
             if (!pendingLoads.containsKey(item.id)) addOverlay(item)
             return
         }
-        if (item is OverlayItem.Text && filter is TextObjectFilterRender) {
-            applyText(filter, item)
+        try {
+            if (item is OverlayItem.Text && filter is TextObjectFilterRender) {
+                applyText(filter, item)
+            }
+            applyTransform(filter, item)
+        } catch (e: Exception) {
+            // A GL/encoder call can throw if the pipeline is mid-teardown. Never let it
+            // crash the caller (overlay toggle, gesture, or reconcile).
+            android.util.Log.e("OverlayRenderer", "updateOverlay failed for ${item.id}", e)
         }
-        applyTransform(filter, item)
     }
 
     private fun addOverlay(item: OverlayItem) {
@@ -342,8 +353,8 @@ class OverlayRenderer(
         try {
             rtmpCamera.glInterface.removeFilter(filter)
         } catch (_: Exception) { }
-        videoPlayers.remove(id)?.release()
-        browserSources.remove(id)?.release()
+        try { videoPlayers.remove(id)?.release() } catch (_: Exception) { }
+        try { browserSources.remove(id)?.release() } catch (_: Exception) { }
         // Don't recycle bitmaps or clear gif bytes - keep them cached for re-application
         // bitmaps.remove(item.id)?.recycle()
         // gifBytes.remove(item.id)

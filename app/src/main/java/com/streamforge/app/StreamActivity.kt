@@ -17,6 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.encoder.utils.gl.AspectRatioMode
 import com.pedro.library.rtmp.RtmpCamera2
 import com.streamforge.app.databinding.ActivityStreamBinding
 import com.streamforge.app.overlay.OverlayItem
@@ -155,6 +156,15 @@ class StreamActivity : AppCompatActivity() {
         // Set the camera instance in StreamManager
         streamManager.setCamera(rtmpCamera)
 
+        // Show the preview as an exact, undistorted view of the 16:9 stream frame (WYSIWYG).
+        // The library default (NONE) stretches to fit the view, distorting the image — that,
+        // plus the old 480p preview, is what made it look squished/"short". Adjust fits the
+        // whole frame with the true aspect ratio, so full-frame overlays (e.g. a StreamElements
+        // URL overlay with a bottom-anchored bar) are shown completely and not cropped like
+        // Fill would do on a phone screen that's wider than 16:9. On a non-16:9 screen this
+        // leaves a thin black margin — an honest match to what actually broadcasts.
+        binding.openGlView.setAspectRatioMode(AspectRatioMode.Adjust)
+
         // Phase 6: bridge overlay model → RootEncoder filter pipeline.
         // Pass `this` (an Activity) as the window-capable context browser overlays need to
         // host their Presentation; applicationContext can't show windows.
@@ -202,7 +212,7 @@ class StreamActivity : AppCompatActivity() {
         binding.openGlView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
                 // Start preview when surface is ready
-                rtmpCamera.startPreview(CameraHelper.Facing.BACK)
+                startPreviewAtConfiguredResolution(CameraHelper.Facing.BACK)
                 // Apply persisted overlays now that the GL pipeline is alive.
                 loadAndApplyOverlays()
                 // Start audio level monitoring
@@ -267,6 +277,17 @@ class StreamActivity : AppCompatActivity() {
             showOverlayManager()
         }
 
+        // First-launch path: we only reach initializeCamera() after the runtime permission
+        // dialog is granted, by which time the OpenGlView surface was already created (while
+        // the dialog was showing). The surfaceCreated callback we just registered therefore
+        // won't fire again, so the preview would stay black until Go Live rebuilt the pipeline.
+        // If the surface is already up, start the preview now.
+        if (binding.openGlView.holder.surface?.isValid == true) {
+            startPreviewAtConfiguredResolution(CameraHelper.Facing.BACK)
+            loadAndApplyOverlays()
+            startAudioLevelMonitoring()
+        }
+
         // Observe stream state
         observeStreamState()
         
@@ -277,6 +298,27 @@ class StreamActivity : AppCompatActivity() {
     private fun bindStreamService() {
         val intent = Intent(this, StreamService::class.java)
         bindService(intent, serviceConnection, BIND_AUTO_CREATE)
+    }
+
+    /**
+     * Start the camera preview at the user's configured stream resolution so the preview is
+     * as sharp as the broadcast. The plain startPreview(facing) overload falls back to the
+     * encoder's default 640×480 (prepareVideo hasn't run yet before Go Live), which made the
+     * preview look blurry and low-res. Falls back to the default if the exact size isn't
+     * supported by the camera.
+     */
+    private fun startPreviewAtConfiguredResolution(facing: CameraHelper.Facing) {
+        if (!::rtmpCamera.isInitialized) return
+        // Idempotent: both surfaceCreated and the first-launch immediate-start can call this.
+        if (rtmpCamera.isOnPreview) return
+        val width = streamConfig?.width ?: StreamConfig.DEFAULT.width
+        val height = streamConfig?.height ?: StreamConfig.DEFAULT.height
+        try {
+            rtmpCamera.startPreview(facing, width, height)
+        } catch (e: Exception) {
+            android.util.Log.e("StreamActivity", "startPreview at ${width}x$height failed; using default", e)
+            try { rtmpCamera.startPreview(facing) } catch (_: Exception) { }
+        }
     }
 
     private fun handleGoLiveClick() {
@@ -383,6 +425,9 @@ class StreamActivity : AppCompatActivity() {
     }
 
     private fun startAudioLevelMonitoring() {
+        // Idempotent: clear any existing loop before re-posting so two entry points
+        // (surfaceCreated / first-launch immediate-start) can't stack duplicate runnables.
+        audioLevelHandler.removeCallbacks(audioLevelRunnable)
         audioLevelHandler.post(audioLevelRunnable)
     }
 
@@ -551,7 +596,7 @@ class StreamActivity : AppCompatActivity() {
             // Brief delay to let the surface settle
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 if (::rtmpCamera.isInitialized && !rtmpCamera.isOnPreview) {
-                    rtmpCamera.startPreview(facing)
+                    startPreviewAtConfiguredResolution(facing)
                 }
             }, 100)
         }

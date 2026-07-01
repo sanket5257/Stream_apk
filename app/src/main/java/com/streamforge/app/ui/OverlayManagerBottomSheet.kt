@@ -84,14 +84,20 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         
-        // Configure bottom sheet behavior
+        // Configure bottom sheet behavior. Give the sheet ~92% of the screen height so the
+        // overlay list has real room to breathe — the default wrap/peek behaviour left it
+        // cramped, with only a couple of tall size-control rows visible at once.
         dialog?.setOnShowListener { dialogInterface ->
             val bottomSheet = (dialogInterface as? com.google.android.material.bottomsheet.BottomSheetDialog)
                 ?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
             bottomSheet?.let {
+                val screenHeight = resources.displayMetrics.heightPixels
+                val sheetHeight = (screenHeight * 0.92f).toInt()
+                it.layoutParams = it.layoutParams.apply { height = sheetHeight }
                 val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(it)
+                behavior.peekHeight = sheetHeight
+                behavior.skipCollapsed = true
                 behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
-                behavior.peekHeight = 800
                 behavior.isDraggable = true
             }
         }
@@ -105,23 +111,27 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     private fun setupRecyclerView() {
         adapter = OverlayListAdapter(
             onVisibilityToggle = { item ->
-                lifecycleScope.launch {
-                    val toggled: OverlayItem = when (item) {
-                        is OverlayItem.Image -> item.copy().also { it.visible = !item.visible }
-                        is OverlayItem.Text -> item.copy().also { it.visible = !item.visible }
-                        is OverlayItem.Gif -> item.copy().also { it.visible = !item.visible }
-                        is OverlayItem.Video -> item.copy().also { it.visible = !item.visible }
-                        is OverlayItem.Browser -> item.copy().also { it.visible = !item.visible }
-                    }
-                    overlayStore.updateOverlay(toggled)
-                    loadOverlays()
+                val toggled: OverlayItem = when (item) {
+                    is OverlayItem.Image -> item.copy().also { it.visible = !item.visible }
+                    is OverlayItem.Text -> item.copy().also { it.visible = !item.visible }
+                    is OverlayItem.Gif -> item.copy().also { it.visible = !item.visible }
+                    is OverlayItem.Video -> item.copy().also { it.visible = !item.visible }
+                    is OverlayItem.Browser -> item.copy().also { it.visible = !item.visible }
                 }
+                mutateStore { overlayStore.updateOverlay(toggled) }
+            },
+            onLockToggle = { item ->
+                val toggled: OverlayItem = when (item) {
+                    is OverlayItem.Image -> item.copy().also { it.locked = !item.locked }
+                    is OverlayItem.Text -> item.copy().also { it.locked = !item.locked }
+                    is OverlayItem.Gif -> item.copy().also { it.locked = !item.locked }
+                    is OverlayItem.Video -> item.copy().also { it.locked = !item.locked }
+                    is OverlayItem.Browser -> item.copy().also { it.locked = !item.locked }
+                }
+                mutateStore { overlayStore.updateOverlay(toggled) }
             },
             onDelete = { item ->
-                lifecycleScope.launch {
-                    overlayStore.removeOverlay(item.id)
-                    loadOverlays()
-                }
+                mutateStore { overlayStore.removeOverlay(item.id) }
             },
             onEdit = { item ->
                 if (item is OverlayItem.Text) showTextDialog(item)
@@ -132,19 +142,13 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
             },
             onScaleSettled = { item, scale ->
                 // Gesture finished — persist the final size and re-broadcast the list.
-                lifecycleScope.launch {
-                    overlayStore.updateOverlay(item.withScale(scale))
-                    loadOverlays()
-                }
+                mutateStore { overlayStore.updateOverlay(item.withScale(scale)) }
             },
             onHeightScaleChange = { item, heightScale ->
                 onOverlayLiveUpdate?.invoke(item.withHeightScale(heightScale))
             },
             onHeightScaleSettled = { item, heightScale ->
-                lifecycleScope.launch {
-                    overlayStore.updateOverlay(item.withHeightScale(heightScale))
-                    loadOverlays()
-                }
+                mutateStore { overlayStore.updateOverlay(item.withHeightScale(heightScale)) }
             },
             onStartDrag = { vh -> itemTouchHelper.startDrag(vh) }
         )
@@ -228,10 +232,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                     return@setPositiveButton
                 }
                 val overlay = OverlayItem.Browser(id = UUID.randomUUID().toString(), url = url)
-                lifecycleScope.launch {
-                    overlayStore.addOverlay(overlay)
-                    loadOverlays()
-                }
+                mutateStore { overlayStore.addOverlay(overlay) }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -287,10 +288,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                     chromaColor = android.graphics.Color.GREEN,
                     chromaSensitive = sensitive
                 )
-                lifecycleScope.launch {
-                    overlayStore.addOverlay(overlay)
-                    loadOverlays()
-                }
+                mutateStore { overlayStore.addOverlay(overlay) }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -308,10 +306,9 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         val dialog = TextOverlayDialog()
         existing?.let { dialog.setExisting(it) }
         dialog.setOnResult { result ->
-            lifecycleScope.launch {
+            mutateStore {
                 if (existing != null) overlayStore.updateOverlay(result)
                 else overlayStore.addOverlay(result)
-                loadOverlays()
             }
         }
         dialog.show(parentFragmentManager, TextOverlayDialog.TAG)
@@ -345,22 +342,51 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
             // Some providers don't grant persistable perms; URI may still work for this session.
         }
         val overlay = build(uri)
+        mutateStore { overlayStore.addOverlay(overlay) }
+    }
+
+    /**
+     * Run a store mutation, then refresh the list — with a single guard around the whole
+     * thing. Overlay writes touch DataStore + JSON serialization and then re-apply the list
+     * to the live GL pipeline; any of those can throw. Without this guard an exception would
+     * escape the coroutine and crash the app (dumping the user out of the sheet). We instead
+     * log, show a toast, and keep the sheet alive.
+     */
+    private fun mutateStore(block: suspend () -> Unit) {
         lifecycleScope.launch {
-            overlayStore.addOverlay(overlay)
-            loadOverlays()
+            try {
+                block()
+                loadOverlays()
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Overlay update failed", e)
+                if (isAdded) android.widget.Toast.makeText(
+                    requireContext(), R.string.overlay_update_failed, android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
     private fun loadOverlays() {
         lifecycleScope.launch {
-            val overlays = overlayStore.loadOverlays()
-            // Show front-most (highest zIndex) first so the list reads top-to-bottom like the
-            // visible stack. The renderer/editor re-sort by zIndex themselves, so the order we
-            // hand them doesn't matter — only the list display order does.
-            adapter.submitList(overlays.sortedByDescending { it.zIndex })
-            binding.tvEmptyState.isVisible = overlays.isEmpty()
-            binding.rvOverlays.isVisible = overlays.isNotEmpty()
-            onOverlaysChanged?.invoke(overlays)
+            try {
+                val overlays = overlayStore.loadOverlays()
+                // Show front-most (highest zIndex) first so the list reads top-to-bottom like
+                // the visible stack. The renderer/editor re-sort by zIndex themselves, so the
+                // order we hand them doesn't matter — only the list display order does.
+                adapter.submitList(overlays.sortedByDescending { it.zIndex })
+                binding.tvEmptyState.isVisible = overlays.isEmpty()
+                binding.rvOverlays.isVisible = overlays.isNotEmpty()
+                binding.tvOverlayCount.text = when (overlays.size) {
+                    0 -> ""
+                    1 -> "1 overlay"
+                    else -> "${overlays.size} overlays"
+                }
+                // Re-applying to the live GL pipeline (onOverlaysChanged) can throw from the
+                // encoder; keep it inside the guard so it never crashes the sheet.
+                onOverlaysChanged?.invoke(overlays)
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Loading overlays failed", e)
+            }
         }
     }
 
@@ -373,10 +399,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         val ordered = adapter.currentOrder().toMutableList()
         val last = ordered.size - 1
         ordered.forEachIndexed { i, ov -> ov.zIndex = last - i }
-        lifecycleScope.launch {
-            overlayStore.saveOverlays(ordered)
-            loadOverlays()
-        }
+        mutateStore { overlayStore.saveOverlays(ordered) }
     }
 
     fun setOnOverlaysChangedListener(listener: (List<OverlayItem>) -> Unit) {

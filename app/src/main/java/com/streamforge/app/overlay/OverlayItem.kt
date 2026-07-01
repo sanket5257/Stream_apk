@@ -17,6 +17,7 @@ sealed class OverlayItem {
     abstract var rotation: Float   // degrees
     abstract var zIndex: Int       // drawing order (higher = on top)
     abstract var visible: Boolean  // show/hide toggle
+    abstract var locked: Boolean   // when true, ignore preview move/scale/rotate gestures
 
     /**
      * Image overlay (PNG, JPG, etc.)
@@ -31,7 +32,8 @@ sealed class OverlayItem {
         override var heightScale: Float = 1.0f,
         override var rotation: Float = 0f,
         override var zIndex: Int = 0,
-        override var visible: Boolean = true
+        override var visible: Boolean = true,
+        override var locked: Boolean = false
     ) : OverlayItem()
 
     /**
@@ -53,7 +55,8 @@ sealed class OverlayItem {
         override var heightScale: Float = 1.0f,
         override var rotation: Float = 0f,
         override var zIndex: Int = 0,
-        override var visible: Boolean = true
+        override var visible: Boolean = true,
+        override var locked: Boolean = false
     ) : OverlayItem()
 
     /**
@@ -69,7 +72,8 @@ sealed class OverlayItem {
         override var heightScale: Float = 1.0f,
         override var rotation: Float = 0f,
         override var zIndex: Int = 0,
-        override var visible: Boolean = true
+        override var visible: Boolean = true,
+        override var locked: Boolean = false
     ) : OverlayItem()
 
     /**
@@ -93,7 +97,8 @@ sealed class OverlayItem {
         override var heightScale: Float = 1.0f,
         override var rotation: Float = 0f,
         override var zIndex: Int = 0,
-        override var visible: Boolean = true
+        override var visible: Boolean = true,
+        override var locked: Boolean = false
     ) : OverlayItem()
 
     /**
@@ -115,6 +120,7 @@ sealed class OverlayItem {
         override var heightScale: Float = 5.0f,
         override var rotation: Float = 0f,
         override var zIndex: Int = 0,
-        override var visible: Boolean = true
+        override var visible: Boolean = true,
+        override var locked: Boolean = false
     ) : OverlayItem()
 }

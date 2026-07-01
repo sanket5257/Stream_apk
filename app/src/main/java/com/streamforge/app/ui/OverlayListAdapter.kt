@@ -26,6 +26,7 @@ import kotlin.math.roundToInt
  */
 class OverlayListAdapter(
     private val onVisibilityToggle: (OverlayItem) -> Unit,
+    private val onLockToggle: (OverlayItem) -> Unit = {},
     private val onDelete: (OverlayItem) -> Unit,
     private val onEdit: (OverlayItem) -> Unit = {},
     private val onScaleChange: (OverlayItem, Float) -> Unit = { _, _ -> },
@@ -38,10 +39,16 @@ class OverlayListAdapter(
 
     private val items = mutableListOf<OverlayItem>()
 
+    // Ids of rows whose size panel is expanded. Rows are collapsed by default so many
+    // overlays stay visible at once; the user expands only the one they're tuning.
+    private val expandedIds = mutableSetOf<String>()
+
     @SuppressLint("NotifyDataSetChanged")
     fun submitList(list: List<OverlayItem>) {
         items.clear()
         items.addAll(list)
+        // Drop expansion state for overlays that no longer exist.
+        expandedIds.retainAll(list.mapTo(mutableSetOf()) { it.id })
         notifyDataSetChanged()
     }
 
@@ -103,6 +110,9 @@ class OverlayListAdapter(
                 if (item.visible) R.drawable.ic_visibility else R.drawable.ic_visibility_off
             )
             binding.btnToggleVisibility.setOnClickListener { onVisibilityToggle(item) }
+
+            bindLock(item)
+
             binding.btnDelete.setOnClickListener { onDelete(item) }
             binding.root.setOnClickListener {
                 if (item is OverlayItem.Text) onEdit(item)
@@ -117,6 +127,56 @@ class OverlayListAdapter(
             }
 
             bindSizeControls(item)
+            applyExpansion(item)
+        }
+
+        /**
+         * Show/hide the size panel per the row's expansion state. Browser overlays have no
+         * size controls, so their expand toggle is hidden entirely. Runs after
+         * [bindSizeControls] so it has the final say on the panel's visibility.
+         */
+        /**
+         * Bind the lock toggle. A locked overlay ignores preview gestures and hides its size
+         * controls, so a dialed-in layout can't be nudged by accident. Browser overlays are
+         * inherently full-frame / non-movable, so they get no lock control.
+         */
+        private fun bindLock(item: OverlayItem) {
+            if (item is OverlayItem.Browser) {
+                binding.btnToggleLock.visibility = android.view.View.GONE
+                return
+            }
+            binding.btnToggleLock.visibility = android.view.View.VISIBLE
+            binding.btnToggleLock.setIconResource(
+                if (item.locked) R.drawable.ic_lock else R.drawable.ic_lock_open
+            )
+            binding.btnToggleLock.setIconTintResource(
+                if (item.locked) R.color.action_green else R.color.text_secondary
+            )
+            binding.btnToggleLock.contentDescription = binding.root.context.getString(
+                if (item.locked) R.string.overlay_unlock else R.string.overlay_lock
+            )
+            binding.btnToggleLock.setOnClickListener { onLockToggle(item) }
+        }
+
+        private fun applyExpansion(item: OverlayItem) {
+            if (item is OverlayItem.Browser || item.locked) {
+                binding.btnExpandSize.visibility = android.view.View.GONE
+                binding.sizeControls.visibility = android.view.View.GONE
+                return
+            }
+            binding.btnExpandSize.visibility = android.view.View.VISIBLE
+            val expanded = expandedIds.contains(item.id)
+            binding.sizeControls.visibility =
+                if (expanded) android.view.View.VISIBLE else android.view.View.GONE
+            binding.btnExpandSize.setIconResource(
+                if (expanded) R.drawable.ic_arrow_up else R.drawable.ic_arrow_down
+            )
+            binding.btnExpandSize.setOnClickListener {
+                if (expandedIds.contains(item.id)) expandedIds.remove(item.id)
+                else expandedIds.add(item.id)
+                val pos = adapterPosition
+                if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos)
+            }
         }
 
         private fun bindSizeControls(item: OverlayItem) {
@@ -129,7 +189,7 @@ class OverlayListAdapter(
             // TEXT overlays only get a single proportional Scale slider.
             if (item is OverlayItem.Text) {
                 binding.sizeControls.visibility = ViewGroup.VISIBLE
-                binding.tvWidthLabel.text = "Scale"
+                binding.tvWidthLabel.text = "Size"
                 binding.seekHeight.visibility = android.view.View.GONE
                 binding.btnHeightDown.visibility = android.view.View.GONE
                 binding.btnHeightUp.visibility = android.view.View.GONE
@@ -233,7 +293,7 @@ class OverlayListAdapter(
             binding.tvOverlayDetails.text = when (item) {
                 is OverlayItem.Browser -> "Web overlay · full screen"
                 is OverlayItem.Text ->
-                    "Text · ${item.fontSizeSp.toInt()}sp · Scale %.1fx".format(scale)
+                    "Text · Size %.1fx".format(scale)
                 is OverlayItem.Video ->
                     transformDetails(scale, heightScale) + if (item.loop) " · loop" else ""
                 else -> transformDetails(scale, heightScale)

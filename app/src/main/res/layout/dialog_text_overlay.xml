@@ -36,51 +36,8 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Font size -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_xl"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/font_size_label"
-                android:textAppearance="@style/TextAppearance.SF.Label" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/tilFontSize"
-                style="@style/Widget.StreamForge.TextInput"
-                android:layout_width="84dp"
-                android:layout_height="wrap_content"
-                app:errorEnabled="false">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/etFontSize"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="number"
-                    android:maxLength="3"
-                    android:text="32"
-                    android:textAlignment="center"
-                    android:textColor="@color/action_green"
-                    android:textStyle="bold" />
-
-            </com.google.android.material.textfield.TextInputLayout>
-
-        </LinearLayout>
-
-        <com.google.android.material.slider.Slider
-            android:id="@+id/sliderFontSize"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:stepSize="2"
-            android:value="32"
-            android:valueFrom="12"
-            android:valueTo="96" />
+        <!-- Size note: text size is adjusted on the overlay list (Size slider) or by
+             pinching on the preview, so there is no redundant font-size control here. -->
 
         <!-- Font family -->
         <TextView
