@@ -43,6 +43,7 @@
     <string name="status_live">● LIVE</string>
     <string name="status_failed">Failed: %s</string>
     <string name="stream_recovering">Reconnecting stream…</string>
+    <string name="enter_stream_key_first">Enter your YouTube stream key first</string>
 
     <!-- Foreground service -->
     <string name="notif_channel_name">Live streaming</string>

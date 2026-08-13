@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@color/surface_card">
@@ -36,8 +37,73 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Size note: text size is adjusted on the overlay list (Size slider) or by
-             pinching on the preview, so there is no redundant font-size control here. -->
+        <!-- Size. Drives OverlayItem.scale (the SAME value as the overlay list's Size
+             slider and preview pinch), so all three controls stay in sync. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xl"
+            android:layout_marginBottom="@dimen/space_sm"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/overlay_size_label"
+                android:textAppearance="@style/TextAppearance.SF.Overline" />
+
+            <TextView
+                android:id="@+id/tvSizeValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.SF.Label"
+                tools:text="1.0x" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSizeDown"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:contentDescription="@string/overlay_size_decrease"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_remove"
+                app:iconSize="18dp"
+                app:iconTint="@color/text_primary" />
+
+            <SeekBar
+                android:id="@+id/seekSize"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="100"
+                android:progressBackgroundTint="@color/divider"
+                android:progressTint="@color/action_green"
+                android:thumbTint="@color/action_green" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSizeUp"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:contentDescription="@string/overlay_size_increase"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_add"
+                app:iconSize="18dp"
+                app:iconTint="@color/text_primary" />
+
+        </LinearLayout>
 
         <!-- Font family -->
         <TextView

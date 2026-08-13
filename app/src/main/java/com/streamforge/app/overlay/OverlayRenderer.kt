@@ -203,7 +203,15 @@ class OverlayRenderer(
             if (x <= -widthPercent) x = 100f
             scrollPositions[item.id] = x
             val topLeftY = (item.y * 100f) - (heightPercentFor(item) / 2f)
-            filter.setPosition(x, topLeftY)
+            // This runs on the ticker's own repeating runnable, OUTSIDE reconcile's per-item
+            // guard. A filter torn down by a visibility toggle can throw here — an uncaught
+            // exception on this loop crashes the whole app (the "toggling kicks me back to
+            // Home" symptom, since a restart re-routes through Login → Home). Isolate it.
+            try {
+                filter.setPosition(x, topLeftY)
+            } catch (e: Exception) {
+                android.util.Log.e("OverlayRenderer", "tickScroll setPosition failed for ${item.id}", e)
+            }
         }
     }
 

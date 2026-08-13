@@ -33,6 +33,11 @@ class OverlayListAdapter(
     private val onScaleSettled: (OverlayItem, Float) -> Unit = { _, _ -> },
     private val onHeightScaleChange: (OverlayItem, Float) -> Unit = { _, _ -> },
     private val onHeightScaleSettled: (OverlayItem, Float) -> Unit = { _, _ -> },
+    // Text overlays scale PROPORTIONALLY: one value drives width AND height together. These
+    // must apply both in a single item copy — issuing separate width/height updates from the
+    // same (stale) item makes the second overwrite the first, so the text never resizes.
+    private val onProportionalScaleChange: (OverlayItem, Float) -> Unit = { _, _ -> },
+    private val onProportionalScaleSettled: (OverlayItem, Float) -> Unit = { _, _ -> },
     // Called when the user touches a row's drag handle, so the host can start the drag.
     private val onStartDrag: (RecyclerView.ViewHolder) -> Unit = {}
 ) : RecyclerView.Adapter<OverlayListAdapter.OverlayViewHolder>() {
@@ -172,10 +177,19 @@ class OverlayListAdapter(
                 if (expanded) R.drawable.ic_arrow_up else R.drawable.ic_arrow_down
             )
             binding.btnExpandSize.setOnClickListener {
-                if (expandedIds.contains(item.id)) expandedIds.remove(item.id)
-                else expandedIds.add(item.id)
-                val pos = adapterPosition
-                if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos)
+                // Toggle the panel directly on the bound views instead of notifyItemChanged.
+                // A rebind runs the RecyclerView change animation (a ~250ms cross-fade), which
+                // made the size slider look like it "took time to appear" after tapping expand.
+                val nowExpanded = if (expandedIds.contains(item.id)) {
+                    expandedIds.remove(item.id); false
+                } else {
+                    expandedIds.add(item.id); true
+                }
+                binding.sizeControls.visibility =
+                    if (nowExpanded) android.view.View.VISIBLE else android.view.View.GONE
+                binding.btnExpandSize.setIconResource(
+                    if (nowExpanded) R.drawable.ic_arrow_up else R.drawable.ic_arrow_down
+                )
             }
         }
 
@@ -202,14 +216,12 @@ class OverlayListAdapter(
                         if (!fromUser) return
                         val scale = progressToScale(progress)
                         bindDetails(item, scale, scale)
-                        onScaleChange(item, scale)
-                        onHeightScaleChange(item, scale)
+                        // One combined update sets width AND height together (proportional).
+                        onProportionalScaleChange(item, scale)
                     }
                     override fun onStartTrackingTouch(sb: SeekBar) {}
                     override fun onStopTrackingTouch(sb: SeekBar) {
-                        val scale = progressToScale(sb.progress)
-                        onScaleSettled(item, scale)
-                        onHeightScaleSettled(item, scale)
+                        onProportionalScaleSettled(item, progressToScale(sb.progress))
                     }
                 })
                 binding.btnWidthDown.setOnClickListener { stepTextScale(item, -SIZE_STEP) }
@@ -265,10 +277,8 @@ class OverlayListAdapter(
             binding.seekWidth.progress = progress
             val scale = progressToScale(progress)
             bindDetails(item, scale, scale)
-            onScaleChange(item, scale)
-            onScaleSettled(item, scale)
-            onHeightScaleChange(item, scale)
-            onHeightScaleSettled(item, scale)
+            onProportionalScaleChange(item, scale)
+            onProportionalScaleSettled(item, scale)
         }
 
         private fun stepWidth(item: OverlayItem, delta: Int) {

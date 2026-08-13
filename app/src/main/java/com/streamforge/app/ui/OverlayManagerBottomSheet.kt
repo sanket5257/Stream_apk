@@ -150,6 +150,14 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
             onHeightScaleSettled = { item, heightScale ->
                 mutateStore { overlayStore.updateOverlay(item.withHeightScale(heightScale)) }
             },
+            onProportionalScaleChange = { item, scale ->
+                // Text: width + height move together in ONE copy so the preview resizes
+                // proportionally (separate width/height updates would fight each other).
+                onOverlayLiveUpdate?.invoke(item.withScaleBoth(scale))
+            },
+            onProportionalScaleSettled = { item, scale ->
+                mutateStore { overlayStore.updateOverlay(item.withScaleBoth(scale)) }
+            },
             onStartDrag = { vh -> itemTouchHelper.startDrag(vh) }
         )
         binding.rvOverlays.layoutManager = LinearLayoutManager(requireContext())
@@ -426,6 +434,20 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         is OverlayItem.Gif -> copy().also { it.heightScale = heightScale }
         is OverlayItem.Video -> copy().also { it.heightScale = heightScale }
         is OverlayItem.Browser -> copy().also { it.heightScale = heightScale }
+    }
+
+    /**
+     * Returns a copy with BOTH width ([OverlayItem.scale]) and height ([OverlayItem.heightScale])
+     * set to [scale] — used for text, which scales proportionally. Applying both in one copy
+     * (rather than two separate updates from the same source item) is what actually makes text
+     * grow/shrink instead of stretching.
+     */
+    private fun OverlayItem.withScaleBoth(scale: Float): OverlayItem = when (this) {
+        is OverlayItem.Image -> copy().also { it.scale = scale; it.heightScale = scale }
+        is OverlayItem.Text -> copy().also { it.scale = scale; it.heightScale = scale }
+        is OverlayItem.Gif -> copy().also { it.scale = scale; it.heightScale = scale }
+        is OverlayItem.Video -> copy().also { it.scale = scale; it.heightScale = scale }
+        is OverlayItem.Browser -> copy().also { it.scale = scale; it.heightScale = scale }
     }
 
     override fun onDestroyView() {

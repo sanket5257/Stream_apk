@@ -3,6 +3,7 @@ package com.streamforge.app.stream
 import android.media.AudioManager
 import com.pedro.common.ConnectChecker
 import com.pedro.library.rtmp.RtmpCamera2
+import com.pedro.library.util.BitrateAdapter
 import com.streamforge.app.storage.StreamConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,30 @@ class StreamManager(
      */
     @Volatile
     var lastBitrateBps: Long = 0L
+        private set
+
+    /**
+     * Adaptive bitrate. A fixed high bitrate on a variable mobile uplink overruns the RTMP
+     * send queue, which shows up as "packet sending" errors and mid-stream disconnects. The
+     * adapter watches the achieved bitrate + the socket's congestion signal each second and
+     * lowers/raises the encoder bitrate on the fly (setVideoBitrateOnFly) so the stream rides
+     * the real available bandwidth instead of dropping. Ceiling is the profile we actually
+     * prepared with (set in startStream); the adapter never exceeds it.
+     */
+    private val bitrateAdapter = BitrateAdapter(BitrateAdapter.Listener { bitrate ->
+        try {
+            rtmpCamera?.setVideoBitrateOnFly(bitrate)
+        } catch (e: Exception) {
+            android.util.Log.w("StreamManager", "setVideoBitrateOnFly failed", e)
+        }
+    })
+
+    // Resolution the encoder actually configured with (after any fallback). Reported so the
+    // overlay pipeline can size overlays to the real output, not the requested-but-unsupported
+    // profile.
+    @Volatile var activeWidth: Int = 0
+        private set
+    @Volatile var activeHeight: Int = 0
         private set
 
     /** True while RootEncoder considers the RTMP client connected/publishing. */
@@ -57,7 +82,14 @@ class StreamManager(
      * pass [useBackup] = true to dial the backup URL (Phase 7 failover).
      */
     fun startStream(config: StreamConfig, useBackup: Boolean = false) {
-        val camera = rtmpCamera ?: return
+        val camera = rtmpCamera
+        if (camera == null) {
+            // Surface it instead of silently no-oping — a silent return here is why "Go Live"
+            // sometimes did nothing and had to be tapped again.
+            android.util.Log.e("StreamManager", "startStream: camera not initialized")
+            _state.value = StreamState.Failed("Camera not ready")
+            return
+        }
 
         // Guard against a double start — a stale reconnect racing a manual start, or the
         // surface-loss recovery firing while we're already up. Re-publishing on an
@@ -69,31 +101,39 @@ class StreamManager(
             return
         }
 
+        // Fail fast with a clear message rather than dialing a keyless ingest URL that YouTube
+        // just rejects (looks to the user like a random "configure"/connection failure).
+        if (config.streamKey.isBlank()) {
+            _state.value = StreamState.Failed("Enter your YouTube stream key first")
+            return
+        }
+
         lastBitrateBps = 0L
         _state.value = StreamState.Connecting
 
-        val videoPrepared = camera.prepareVideo(
-            config.width,
-            config.height,
-            config.fps,
-            config.videoBitrateKbps * 1024,
-            1, // iFrameInterval in seconds — shorter GOP cuts glass-to-glass latency
-               // (~1s reduction vs 2s) at the cost of ~5–10% bitrate efficiency.
-            0  // rotation
-        )
+        // Prepare the video encoder, falling back to progressively lighter profiles if the
+        // requested one can't be configured on this device's encoder. Configuring 1080p@6Mbps
+        // returns false on some phones; retrying the SAME impossible profile (the old
+        // behaviour) just dead-ends into repeated failures, which read as "stream configure
+        // issue" and forced the user to keep pressing Go Live.
+        val chosenBitrateKbps = prepareVideoWithFallback(camera, config)
+        val videoPrepared = chosenBitrateKbps > 0
 
-        val audioPrepared = camera.prepareAudio(
-            config.audioBitrateKbps * 1024,
-            44100,
-            true,
-            false,
-            false
-        )
+        val audioPrepared = if (videoPrepared) {
+            try {
+                camera.prepareAudio(config.audioBitrateKbps * 1024, 44100, true, false, false)
+            } catch (e: Exception) {
+                android.util.Log.e("StreamManager", "prepareAudio threw", e); false
+            }
+        } else false
 
         if (!videoPrepared || !audioPrepared) {
-            _state.value = StreamState.Failed("Failed to prepare encoders")
+            _state.value = StreamState.Failed("Couldn't configure the encoder on this device")
             return
         }
+
+        // Arm adaptive bitrate against the profile we actually prepared with.
+        bitrateAdapter.setMaxBitrate(chosenBitrateKbps * 1024)
 
         // Phase 7: route to external mic if the user picked one. Must be between
         // prepareAudio (creates AudioRecord) and startStream (starts recording).
@@ -126,10 +166,46 @@ class StreamManager(
     }
 
     /**
+     * Try to configure the video encoder at the requested profile, then progressively lighter
+     * fallbacks (720p, then 480p) if configuration fails. Returns the video bitrate (kbps) the
+     * encoder was actually prepared with, or 0 if even the lowest profile failed. Also records
+     * [activeWidth]/[activeHeight] for the profile that succeeded.
+     */
+    private fun prepareVideoWithFallback(camera: RtmpCamera2, config: StreamConfig): Int {
+        // requested first, then safe fallbacks — deduped and only those lighter than requested.
+        val profiles = buildList {
+            add(Triple(config.width, config.height, config.videoBitrateKbps))
+            if (config.height > 720) add(Triple(1280, 720, minOf(config.videoBitrateKbps, 4500)))
+            if (config.height > 480) add(Triple(854, 480, minOf(config.videoBitrateKbps, 2500)))
+        }
+        for ((w, h, kbps) in profiles) {
+            val ok = try {
+                camera.prepareVideo(
+                    w, h, config.fps, kbps * 1024,
+                    1, // iFrameInterval (s) — short GOP trims glass-to-glass latency.
+                    0  // rotation
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("StreamManager", "prepareVideo ${w}x$h threw", e)
+                false
+            }
+            if (ok) {
+                activeWidth = w
+                activeHeight = h
+                android.util.Log.d("StreamManager", "Encoder configured at ${w}x$h @ ${kbps}kbps")
+                return kbps
+            }
+            android.util.Log.w("StreamManager", "Encoder rejected ${w}x$h; trying a lighter profile")
+        }
+        return 0
+    }
+
+    /**
      * Stop the current stream.
      */
     fun stopStream() {
         lastBitrateBps = 0L
+        bitrateAdapter.reset()
         rtmpCamera?.stopStream()
         _state.value = StreamState.Idle
     }
@@ -150,6 +226,14 @@ class StreamManager(
     override fun onNewBitrate(bitrate: Long) {
         // Real outbound bitrate — the watchdog uses this to detect a media-less session.
         lastBitrateBps = bitrate
+        // Feed the adaptive-bitrate loop: if the RTMP send queue is congested, ease the
+        // encoder bitrate down so we keep publishing instead of dropping the connection.
+        val congested = try {
+            rtmpCamera?.streamClient?.hasCongestion() ?: false
+        } catch (e: Exception) {
+            false
+        }
+        bitrateAdapter.adaptBitrate(bitrate, congested)
     }
 
     override fun onDisconnect() {

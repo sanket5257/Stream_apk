@@ -40,12 +40,18 @@ class StreamService : Service() {
         // No-data watchdog tuning. "Live" from RootEncoder only means the RTMP handshake
         // succeeded; these let us detect a session that connected but carries no media and
         // recover it the way other streaming apps do — auto-reconnect.
-        private const val NO_DATA_GRACE_MS = 8000L      // let the encoder warm up first
+        //
+        // These are deliberately lenient: a brief network stall or slow YouTube ingest warmup
+        // must NOT be mistaken for a dead session, or a perfectly healthy stream gets torn down
+        // (the "breaks after ~1 min" symptom, since the old 8s+8s+give-up-after-3 tripped right
+        // around the one-minute mark). With adaptive bitrate now keeping the pipe from
+        // congesting, genuine zero-media is rare, so we can afford to wait longer before acting.
+        private const val NO_DATA_GRACE_MS = 12000L     // let the encoder + ingest warm up first
         private const val WATCHDOG_TICK_MS = 1000L
-        private const val NO_DATA_TIMEOUT_MS = 8000L    // no bytes this long => dead session
+        private const val NO_DATA_TIMEOUT_MS = 15000L   // sustained no bytes => dead session
         private const val RECONNECT_COOLDOWN_MS = 4000L // let YouTube release the key
         private const val MIN_RECONNECT_MS = 3000L      // floor for backoff reconnects
-        private const val MAX_FORCED_RECONNECTS = 3     // give up after this many dead sessions
+        private const val MAX_FORCED_RECONNECTS = 5     // give up only after real persistence
     }
 
     private val binder = StreamBinder()
@@ -55,6 +61,11 @@ class StreamService : Service() {
     private var usingBackup = false
     private var backupExhausted = false
     private var currentConfig: StreamConfig? = null
+    // Set when ACTION_START arrives before the activity has handed us a StreamManager. The
+    // start is replayed the moment setStreamManager() is called, so the foreground notification
+    // never shows for a stream that silently never started (the "press Go Live several times"
+    // symptom on a cold start).
+    private var pendingStartConfig: StreamConfig? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
     // Tracked so we can cancel them on stop — otherwise a delayed reconnect can re-publish
@@ -152,9 +163,17 @@ class StreamService : Service() {
         )
         
         startForeground(NotificationHelper.NOTIFICATION_ID, notification)
-        
-        // Start the actual stream
-        streamManager?.startStream(config)
+
+        // Start the actual stream. If the activity hasn't bound its StreamManager yet (cold
+        // start race), queue the request instead of silently dropping it — setStreamManager()
+        // will replay it.
+        val mgr = streamManager
+        if (mgr == null) {
+            Log.w(TAG, "StreamManager not ready yet — queuing start until bind completes")
+            pendingStartConfig = config
+        } else {
+            mgr.startStream(config)
+        }
     }
 
     private fun stopStreaming() {
@@ -166,6 +185,7 @@ class StreamService : Service() {
         usingBackup = false
         backupExhausted = false
         forcedReconnects = 0
+        pendingStartConfig = null
         streamManager?.stopStream()
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -195,6 +215,16 @@ class StreamService : Service() {
 
     fun setStreamManager(manager: StreamManager) {
         this.streamManager = manager
+
+        // Replay a start that arrived before we had a manager (cold-start race). Guard on
+        // isStreaming so a rebind mid-stream doesn't kick off a duplicate publish.
+        pendingStartConfig?.let { cfg ->
+            pendingStartConfig = null
+            if (!manager.isStreaming()) {
+                Log.d(TAG, "Replaying queued start now that StreamManager is bound")
+                manager.startStream(cfg)
+            }
+        }
 
         // Attach the state collector exactly once. The activity can rebind multiple times
         // (rotation, returning from the media picker); without this guard each rebind added

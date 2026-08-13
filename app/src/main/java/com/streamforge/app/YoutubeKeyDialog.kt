@@ -1,7 +1,9 @@
 package com.streamforge.app
 
+import android.text.InputType
 import android.widget.EditText
-import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -10,9 +12,10 @@ import com.streamforge.app.storage.StreamPrefs
 import kotlinx.coroutines.launch
 
 /**
- * Shared dialog for entering the YouTube stream key — the one real credential the
- * app needs to broadcast. Stored encrypted via StreamPrefs and used by the live
- * pipeline. Used from Home and Profile.
+ * Shared dialog for entering the stream connection — the ingest/server URL plus the
+ * stream key the app needs to broadcast. The URL defaults to YouTube's ingest but is
+ * editable so you can stream to any RTMP endpoint. Stored encrypted via StreamPrefs
+ * and used by the live pipeline. Used from Home and Profile.
  */
 object YoutubeKeyDialog {
 
@@ -20,25 +23,47 @@ object YoutubeKeyDialog {
         val prefs = StreamPrefs(activity)
         activity.lifecycleScope.launch {
             val current = prefs.load()
-            val input = EditText(activity).apply {
-                hint = "Paste your YouTube stream key"
+            val density = activity.resources.displayMetrics.density
+            val pad = (20 * density).toInt()
+            val gap = (12 * density).toInt()
+
+            val urlLabel = TextView(activity).apply { text = "Stream URL (RTMP ingest)" }
+            val urlInput = EditText(activity).apply {
+                hint = "rtmp://a.rtmp.youtube.com/live2/"
+                setText(current.rtmpUrl.ifBlank { StreamConfig.DEFAULT.rtmpUrl })
+                inputType = InputType.TYPE_TEXT_VARIATION_URI
+                setSingleLine(true)
+            }
+
+            val keyLabel = TextView(activity).apply {
+                text = "Stream key"
+                setPadding(0, gap, 0, 0)
+            }
+            val keyInput = EditText(activity).apply {
+                hint = "Paste your stream key"
                 setText(current.streamKey)
                 setSingleLine(true)
             }
-            val pad = (20 * activity.resources.displayMetrics.density).toInt()
-            val container = FrameLayout(activity).apply {
+
+            val container = LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
                 setPadding(pad, pad / 2, pad, 0)
-                addView(input)
+                addView(urlLabel)
+                addView(urlInput)
+                addView(keyLabel)
+                addView(keyInput)
             }
+
             AlertDialog.Builder(activity)
-                .setTitle("YouTube stream key")
-                .setMessage("In YouTube Studio → Go Live → Stream settings, copy your Stream key and paste it here. It's stored only on your device (encrypted) and used to broadcast.")
+                .setTitle("Stream connection")
+                .setMessage("Enter your RTMP ingest URL and stream key. For YouTube, keep the default URL and paste your Stream key from YouTube Studio → Go Live → Stream settings. Stored only on your device (encrypted).")
                 .setView(container)
                 .setPositiveButton("Save") { _, _ ->
-                    val key = input.text?.toString()?.trim().orEmpty()
+                    val url = urlInput.text?.toString()?.trim().orEmpty()
+                        .ifBlank { StreamConfig.DEFAULT.rtmpUrl }
+                    val key = keyInput.text?.toString()?.trim().orEmpty()
                     activity.lifecycleScope.launch {
-                        val rtmp = current.rtmpUrl.ifBlank { StreamConfig.DEFAULT.rtmpUrl }
-                        prefs.save(current.copy(streamKey = key, rtmpUrl = rtmp))
+                        prefs.save(current.copy(streamKey = key, rtmpUrl = url))
                         onSaved()
                     }
                 }

@@ -10,6 +10,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.GridLayout
+import android.widget.SeekBar
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 import com.streamforge.app.R
@@ -20,12 +21,13 @@ import java.util.UUID
 
 /**
  * Dialog for creating or editing a text overlay.
- * User picks text content, font family, color (12 preset swatches OR custom hex code),
- * and scroll mode. Text SIZE is not set here — the renderer sizes text by the overlay's
- * [OverlayItem.scale], which the user adjusts with the "Size" slider on the overlay list
- * or by pinching on the preview. A single size model avoids the old three-way confusion
- * where a font-size control did nothing on screen. [RENDER_SP] is a fixed internal value
- * that only governs render sharpness.
+ * User picks text content, size, font family, color (12 preset swatches OR custom hex code),
+ * and scroll mode.
+ *
+ * The Size slider here writes [OverlayItem.scale] — the SAME single value the overlay list's
+ * "Size" slider and preview pinch use — so the three controls always agree. There is
+ * deliberately no separate font-size value: [RENDER_SP] is a fixed internal constant that
+ * only governs rasterization sharpness, never on-screen size.
  */
 class TextOverlayDialog : DialogFragment() {
 
@@ -73,6 +75,7 @@ class TextOverlayDialog : DialogFragment() {
         binding.etHex.setText(formatHex(selectedColor))
 
         bindFontFamily(binding)
+        bindSize(binding)
         buildSwatches(binding, density)
         bindHexInput(binding)
 
@@ -83,6 +86,10 @@ class TextOverlayDialog : DialogFragment() {
                 val typed = binding.etText.text?.toString()?.takeIf { it.isNotBlank() }
                     ?: getString(R.string.default_text_overlay)
                 val fontKey = OverlayFonts.keyForLabel(binding.actvFont.text?.toString())
+                // Text scales proportionally, so width and height carry the SAME value —
+                // mirroring the withScaleBoth() the list slider applies. Setting only
+                // `scale` here would leave a stale heightScale behind and stretch the text.
+                val chosenScale = OverlayListAdapter.progressToScale(binding.seekSize.progress)
                 val result = OverlayItem.Text(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     text = typed,
@@ -92,10 +99,12 @@ class TextOverlayDialog : DialogFragment() {
                     scroll = binding.switchScroll.isChecked,
                     x = existing?.x ?: 0.5f,
                     y = existing?.y ?: 0.5f,
-                    scale = existing?.scale ?: 1f,
+                    scale = chosenScale,
+                    heightScale = chosenScale,
                     rotation = existing?.rotation ?: 0f,
                     zIndex = existing?.zIndex ?: 0,
-                    visible = existing?.visible ?: true
+                    visible = existing?.visible ?: true,
+                    locked = existing?.locked ?: false
                 )
                 onResult?.invoke(result)
             }
@@ -114,6 +123,36 @@ class TextOverlayDialog : DialogFragment() {
         binding.actvFont.setAdapter(adapter)
         val currentLabel = OverlayFonts.labelFor(existing?.fontKey)
         binding.actvFont.setText(currentLabel, false)
+    }
+
+    /**
+     * Bind the Size slider to [OverlayItem.scale]. Uses the same 0.2x–5.0x progress mapping as
+     * the overlay list slider ([OverlayListAdapter.progressToScale]) so a value set here reads
+     * back identically there. Steps match the list's ±5% buttons.
+     */
+    private fun bindSize(binding: DialogTextOverlayBinding) {
+        val startScale = existing?.scale ?: 1f
+        binding.seekSize.progress = OverlayListAdapter.scaleToProgress(startScale)
+        showSizeValue(binding, binding.seekSize.progress)
+
+        binding.seekSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                showSizeValue(binding, progress)
+            }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) {}
+        })
+
+        binding.btnSizeDown.setOnClickListener { stepSize(binding, -SIZE_STEP) }
+        binding.btnSizeUp.setOnClickListener { stepSize(binding, SIZE_STEP) }
+    }
+
+    private fun stepSize(binding: DialogTextOverlayBinding, delta: Int) {
+        binding.seekSize.progress = (binding.seekSize.progress + delta).coerceIn(0, 100)
+    }
+
+    private fun showSizeValue(binding: DialogTextOverlayBinding, progress: Int) {
+        binding.tvSizeValue.text = "%.1fx".format(OverlayListAdapter.progressToScale(progress))
     }
 
     private fun buildSwatches(binding: DialogTextOverlayBinding, density: Float) {
@@ -212,5 +251,8 @@ class TextOverlayDialog : DialogFragment() {
          * scaled up. New text overlays use this; edited ones keep their stored value.
          */
         const val RENDER_SP = 48f
+
+        /** Progress steps per tap on the −/+ buttons; matches the overlay list's step. */
+        private const val SIZE_STEP = 5
     }
 }

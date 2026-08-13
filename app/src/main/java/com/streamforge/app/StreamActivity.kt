@@ -156,13 +156,12 @@ class StreamActivity : AppCompatActivity() {
         // Set the camera instance in StreamManager
         streamManager.setCamera(rtmpCamera)
 
-        // Show the preview as an exact, undistorted view of the 16:9 stream frame (WYSIWYG).
-        // The library default (NONE) stretches to fit the view, distorting the image — that,
-        // plus the old 480p preview, is what made it look squished/"short". Adjust fits the
-        // whole frame with the true aspect ratio, so full-frame overlays (e.g. a StreamElements
-        // URL overlay with a bottom-anchored bar) are shown completely and not cropped like
-        // Fill would do on a phone screen that's wider than 16:9. On a non-16:9 screen this
-        // leaves a thin black margin — an honest match to what actually broadcasts.
+        // WYSIWYG preview: show the ENTIRE 16:9 broadcast frame, exactly as it goes out.
+        // Adjust keeps the true aspect ratio so full-frame overlays (e.g. a StreamElements
+        // ticker anchored at the bottom) are always fully visible and the preview matches
+        // YouTube 1:1 — the standard broadcast-preview behaviour. RootEncoder centers the
+        // 16:9 preview against the view's black background, so the margins read as a clean
+        // canvas frame rather than a bug.
         binding.openGlView.setAspectRatioMode(AspectRatioMode.Adjust)
 
         // Phase 6: bridge overlay model → RootEncoder filter pipeline.
@@ -321,7 +320,17 @@ class StreamActivity : AppCompatActivity() {
         }
     }
 
+    // Debounce Go Live / Stop taps. Starting a stream has IPC + encoder-config latency before
+    // the state flips to Connecting; without this, an impatient double-tap fired a second
+    // ACTION_START (or a Stop right after a Start), which is exactly the "had to press Go Live
+    // several times / it fought itself" symptom.
+    private var lastGoLiveClickMs: Long = 0L
+
     private fun handleGoLiveClick() {
+        val now = System.currentTimeMillis()
+        if (now - lastGoLiveClickMs < GO_LIVE_DEBOUNCE_MS) return
+        lastGoLiveClickMs = now
+
         val config = streamConfig
         if (config == null) {
             Toast.makeText(this, "Configuration not loaded", Toast.LENGTH_SHORT).show()
@@ -330,6 +339,15 @@ class StreamActivity : AppCompatActivity() {
 
         when (streamManager.state.value) {
             is StreamState.Idle, is StreamState.Failed -> {
+                // Pre-flight the stream key here so we give instant feedback instead of
+                // spinning up the foreground service just to fail.
+                if (config.streamKey.isBlank()) {
+                    Toast.makeText(this, R.string.enter_stream_key_first, Toast.LENGTH_LONG).show()
+                    return
+                }
+                // Immediate visual feedback — flip to Connecting now rather than waiting for the
+                // service round-trip, so the button stops inviting another tap.
+                updateUIForState(StreamState.Connecting)
                 // Start streaming via service
                 val intent = Intent(this, StreamService::class.java).apply {
                     action = StreamService.ACTION_START
@@ -489,13 +507,24 @@ class StreamActivity : AppCompatActivity() {
         bottomSheet.setOnOverlaysChangedListener { overlays ->
             // Persisted store changed (add / delete / visibility / text edit).
             // Push the new list to both the gesture surface and the filter pipeline.
-            binding.overlayEditor.setItems(overlays)
-            overlayRenderer?.applyOverlays(overlays)
+            // Guard: a GL/encoder hiccup here must never crash the activity — an uncaught
+            // exception would kill the process, and the relaunch re-routes Login → Home
+            // (the "toggling an overlay bounced me back to Home" symptom).
+            try {
+                binding.overlayEditor.setItems(overlays)
+                overlayRenderer?.applyOverlays(overlays)
+            } catch (e: Exception) {
+                android.util.Log.e("StreamActivity", "applyOverlays from sheet failed", e)
+            }
         }
         bottomSheet.setOnOverlayLiveUpdateListener { item ->
             // Live size-slider drag: update preview + GL transform without a full reconcile.
-            binding.overlayEditor.updateItem(item)
-            overlayRenderer?.updateOverlay(item)
+            try {
+                binding.overlayEditor.updateItem(item)
+                overlayRenderer?.updateOverlay(item)
+            } catch (e: Exception) {
+                android.util.Log.e("StreamActivity", "live overlay update failed", e)
+            }
         }
         bottomSheet.show(supportFragmentManager, OverlayManagerBottomSheet.TAG)
     }
@@ -619,6 +648,11 @@ class StreamActivity : AppCompatActivity() {
 
         // Note: We don't stop the stream here - the service keeps it running
         // Only stop if user explicitly taps Stop button
+    }
+
+    private companion object {
+        // Ignore Go Live / Stop taps that land within this window of the previous one.
+        const val GO_LIVE_DEBOUNCE_MS = 1500L
     }
 }
 
