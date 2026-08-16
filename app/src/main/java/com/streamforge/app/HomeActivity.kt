@@ -7,6 +7,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.streamforge.app.databinding.ActivityHomeBinding
 import com.streamforge.app.storage.StreamPrefs
+import com.streamforge.app.update.UpdateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -33,6 +34,10 @@ class HomeActivity : AppCompatActivity() {
         binding.cardQuality.setOnClickListener {
             startActivity(Intent(this, MainActivity::class.java))
         }
+
+        // Sideloaded builds have nobody to tell them an update exists, so check here — quietly,
+        // at most twice a day, and never while the user is mid-stream (this screen isn't).
+        UpdateFlow.checkSilently(this)
     }
 
     override fun onResume() {

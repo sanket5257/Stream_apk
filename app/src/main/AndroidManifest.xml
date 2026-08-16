@@ -17,6 +17,11 @@
     <!-- Android 13+ notification permission -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Sideload updates: lets the app hand a downloaded APK to the system installer.
+         The user still confirms every install, and on Android 8+ must also allow this app
+         as an install source (UpdateManager.installPermissionIntent takes them there). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Hardware features (declared as not required so emulators/tablets aren't filtered out) -->
     <uses-feature
         android:name="android.hardware.camera"
@@ -88,6 +93,18 @@
             android:exported="false"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.StreamForge" />
+
+        <!-- Grants the package installer read access to the downloaded APK. A separate
+             authority from any other provider so update files are the only thing exposed. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
 
         <!-- Phase 4A: Foreground service for background streaming -->
         <service

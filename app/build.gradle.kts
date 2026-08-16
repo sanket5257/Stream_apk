@@ -45,6 +45,14 @@ android {
             
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
+
+        // Sideload update channel: the JSON manifest the app polls for new releases (see
+        // RELEASING.md). Left blank the updater simply stays quiet, so builds without it
+        // configured behave exactly as before.
+        val updateManifestUrl = localProps.getProperty("UPDATE_MANIFEST_URL")
+            ?: System.getenv("UPDATE_MANIFEST_URL")
+            ?: ""
+        buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"")
     }
 
     signingConfigs {

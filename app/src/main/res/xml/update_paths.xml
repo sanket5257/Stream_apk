@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the downloaded update APK is shared, and only out of the app's own cache. -->
+<paths>
+    <cache-path
+        name="updates"
+        path="." />
+</paths>

@@ -284,6 +284,35 @@
 
                     <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
 
+                    <!-- App updates (sideload channel — see UpdateManager) -->
+                    <LinearLayout
+                        android:id="@+id/rowUpdate"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="@dimen/space_lg">
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_system_update" app:tint="@color/text_secondary" />
+
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md" android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/update_row_title" android:textAppearance="@style/TextAppearance.SF.Label" />
+                            <TextView android:id="@+id/tvUpdateState" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.SF.Caption" tools:text="Tap to check for a new version" />
+                        </LinearLayout>
+
+                        <ImageView android:layout_width="@dimen/icon_md" android:layout_height="@dimen/icon_md"
+                            android:contentDescription="@null" android:src="@drawable/ic_chevron_right" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
                     <!-- About -->
                     <LinearLayout
                         android:layout_width="match_parent"

@@ -11,6 +11,7 @@ import com.streamforge.app.auth.DeviceHelper
 import com.streamforge.app.auth.LoginActivity
 import com.streamforge.app.databinding.ActivityProfileBinding
 import com.streamforge.app.storage.StreamPrefs
+import com.streamforge.app.update.UpdateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -46,6 +47,8 @@ class ProfileActivity : AppCompatActivity() {
             startActivity(Intent(this, MainActivity::class.java))
         }
         binding.rowTheme.setOnClickListener { showThemeDialog() }
+        binding.tvUpdateState.text = getString(R.string.update_row_subtitle)
+        binding.rowUpdate.setOnClickListener { UpdateFlow.checkManually(this) }
         binding.btnLogout.setOnClickListener { confirmLogout() }
     }
 

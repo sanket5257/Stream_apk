@@ -4,9 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -339,18 +337,16 @@ class OverlayRenderer(
     private data class Band(val left: Float, val width: Float)
 
     /**
-     * Double-buffered scratch strip for a ticker, with the text drawn straight onto it.
-     * Two buffers so we're never drawing into the same bitmap the GL thread is uploading for
-     * the frame in flight.
+     * A ticker's line, and the geometry needed to draw it onto a band-sized strip.
+     *
+     * It holds NO reusable buffer on purpose. RootEncoder's TextureLoader calls recycle() on
+     * every bitmap it uploads — the library takes ownership — so a strip we kept and redrew
+     * would be dead by the next frame (which is exactly why the ticker stopped moving: each
+     * redraw threw on a recycled bitmap and got swallowed by the tick loop's guard). Every
+     * frame therefore gets a fresh bitmap, handed over and forgotten.
      */
     private class TickerStrip(val width: Int, val height: Int) {
-        private val buffers = arrayOf(
-            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888),
-            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        )
-        private val canvases = arrayOf(Canvas(buffers[0]), Canvas(buffers[1]))
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private var next = 0
 
         private var signature = ""
         private var line = ""
@@ -363,7 +359,6 @@ class OverlayRenderer(
 
         /** Current left edge of the line within the strip, in strip pixels. NaN until started. */
         var offset: Float = Float.NaN
-            set(value) { field = value }
 
         /** Width of the rendered line in strip pixels. */
         var textWidth: Float = 0f
@@ -393,12 +388,14 @@ class OverlayRenderer(
             offset = Float.NaN
         }
 
+        /**
+         * A fresh, transparent strip with the line drawn at the current offset. The caller
+         * hands it straight to the filter, which uploads and recycles it.
+         */
         fun draw(): Bitmap {
-            val index = next
-            next = (next + 1) % buffers.size
-            val target = buffers[index]
-            target.eraseColor(Color.TRANSPARENT)
-            canvases[index].drawText(line, offset, baseline, paint)
+            // createBitmap already returns fully transparent pixels — no erase needed.
+            val target = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            Canvas(target).drawText(line, offset, baseline, paint)
             return target
         }
     }
@@ -599,7 +596,7 @@ class OverlayRenderer(
     }
 
     /**
-     * Force a one-shot texture re-upload for an attached image/GIF overlay.
+     * Force a one-shot texture re-upload for an attached overlay.
      * Re-issuing setImage/setGif flips the filter's shouldLoad flag, so the GL thread
      * releases the (possibly blank) texture and uploads it again on the next frame —
      * the same effect as toggling visibility off/on, without detaching the filter.
@@ -608,11 +605,15 @@ class OverlayRenderer(
     private fun reloadTexture(item: OverlayItem): Boolean {
         val filter = filters[item.id] ?: return false
         return when {
-            // A ticker re-uploads its strip every frame, so there is nothing to heal — and it
-            // has no text bitmap of its own to push.
+            // A ticker re-uploads its strip every frame, so there is nothing to heal.
             item is OverlayItem.Text && item.scroll -> false
-            (item is OverlayItem.Image || item is OverlayItem.Text) &&
-                filter is ImageObjectFilterRender -> {
+            item is OverlayItem.Text && filter is ImageObjectFilterRender -> {
+                // The uploaded bitmap is gone (the library recycled it), so healing static
+                // text means rasterizing it again — clearing the signature forces that.
+                textSignatures.remove(item.id)
+                applyText(filter, item)
+            }
+            item is OverlayItem.Image && filter is ImageObjectFilterRender -> {
                 val bmp = bitmaps[item.id]
                 if (bmp != null && !bmp.isRecycled) {
                     filter.setImage(bmp)
@@ -771,10 +772,8 @@ class OverlayRenderer(
 
         val target = textTargetPx(item)
         val signature = textSignature(item, target)
-        val current = bitmaps[item.id]
-        if (textSignatures[item.id] == signature && current != null && !current.isRecycled) {
-            return true
-        }
+        if (textSignatures[item.id] == signature) return true
+
         val rendered = TextOverlayBitmap.render(
             text = item.text,
             fontKey = item.fontKey,
@@ -782,11 +781,11 @@ class OverlayRenderer(
             targetPx = target
         ) ?: return false
 
-        // The previous bitmap is deliberately NOT recycled: the GL thread may still be
-        // reading it for the frame in flight. Dropping the reference lets the GC take it.
-        bitmaps[item.id] = rendered.bitmap
         contentAspect[item.id] = rendered.aspect
         textSignatures[item.id] = signature
+        // Handed over, not cached: the library's TextureLoader recycles whatever it uploads.
+        // (Keeping it in `bitmaps` and testing isRecycled would report "dead" on the very next
+        // frame and re-rasterize the text on every drag frame.)
         filter.setImage(rendered.bitmap)
         return true
     }

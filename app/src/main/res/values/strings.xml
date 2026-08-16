@@ -71,6 +71,8 @@
     <string name="overlay_move_up">Bring forward</string>
     <string name="overlay_move_down">Send backward</string>
     <string name="text_scroll_label">Scroll horizontally (news ticker)</string>
+    <string name="update_row_title">App updates</string>
+    <string name="update_row_subtitle">Tap to check for a new version</string>
     <string name="text_scroll_area_label">Scroll area width</string>
     <string name="text_scroll_area_full">Full width</string>
     <string name="text_scroll_area_hint">The text scrolls inside this band and is clipped at its edges. Drag the overlay in the preview to move the band.</string>
