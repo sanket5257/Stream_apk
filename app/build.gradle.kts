@@ -29,8 +29,10 @@ android {
         applicationId = "com.streamforge.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // versionCode is the ONLY value Android compares when installing an update — it must
+        // increase every release or the install is rejected as a downgrade. See RELEASING.md.
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

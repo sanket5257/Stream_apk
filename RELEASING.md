@@ -20,7 +20,7 @@ version, build, upload the APK, edit the JSON.
 3. **Point the app at it.** Add to `local.properties` (not committed):
 
    ```properties
-   UPDATE_MANIFEST_URL=https://raw.githubusercontent.com/<you>/<repo>/main/release/version.json
+   UPDATE_MANIFEST_URL=https://raw.githubusercontent.com/sanket5257/Stream_apk/main/version.json
    ```
 
    Left unset, the updater stays completely silent — no checks, no UI noise. So this must be
@@ -66,7 +66,7 @@ version, build, upload the APK, edit the JSON.
    {
      "versionCode": 2,
      "versionName": "0.2.0",
-     "apkUrl": "https://github.com/<you>/<repo>/releases/download/v0.2.0/streamforge.apk",
+     "apkUrl": "https://github.com/sanket5257/Stream_apk/releases/download/v0.2.0/streamforge.apk",
      "notes": "What changed, one bullet per line",
      "mandatory": false
    }
