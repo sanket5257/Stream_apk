@@ -18,6 +18,7 @@ import com.streamforge.app.databinding.DialogTextOverlayBinding
 import com.streamforge.app.overlay.OverlayFonts
 import com.streamforge.app.overlay.OverlayItem
 import java.util.UUID
+import kotlin.math.roundToInt
 
 /**
  * Dialog for creating or editing a text overlay.
@@ -76,6 +77,7 @@ class TextOverlayDialog : DialogFragment() {
 
         bindFontFamily(binding)
         bindSize(binding)
+        bindScrollArea(binding)
         buildSwatches(binding, density)
         bindHexInput(binding)
 
@@ -97,6 +99,7 @@ class TextOverlayDialog : DialogFragment() {
                     colorArgb = selectedColor,
                     fontKey = fontKey,
                     scroll = binding.switchScroll.isChecked,
+                    scrollWidth = progressToScrollWidth(binding.seekScrollArea.progress),
                     x = existing?.x ?: 0.5f,
                     y = existing?.y ?: 0.5f,
                     scale = chosenScale,
@@ -145,6 +148,40 @@ class TextOverlayDialog : DialogFragment() {
 
         binding.btnSizeDown.setOnClickListener { stepSize(binding, -SIZE_STEP) }
         binding.btnSizeUp.setOnClickListener { stepSize(binding, SIZE_STEP) }
+    }
+
+    /**
+     * Bind the scroll-track width, and show it only while scrolling is on (it does nothing
+     * for static text). The band is centred on the overlay's own position, so the user aims
+     * it by dragging the overlay in the preview and sizes it here.
+     */
+    private fun bindScrollArea(binding: DialogTextOverlayBinding) {
+        binding.seekScrollArea.progress =
+            scrollWidthToProgress(existing?.scrollWidth ?: 1f)
+        showScrollAreaValue(binding, binding.seekScrollArea.progress)
+
+        binding.seekScrollArea.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                showScrollAreaValue(binding, progress)
+            }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) {}
+        })
+
+        fun refreshVisibility(checked: Boolean) {
+            binding.scrollAreaGroup.visibility = if (checked) View.VISIBLE else View.GONE
+        }
+        refreshVisibility(binding.switchScroll.isChecked)
+        binding.switchScroll.setOnCheckedChangeListener { _, checked -> refreshVisibility(checked) }
+    }
+
+    private fun showScrollAreaValue(binding: DialogTextOverlayBinding, progress: Int) {
+        val width = progressToScrollWidth(progress)
+        binding.tvScrollAreaValue.text = if (width >= FULL_WIDTH_THRESHOLD) {
+            getString(R.string.text_scroll_area_full)
+        } else {
+            "%d%%".format((width * 100).roundToInt())
+        }
     }
 
     private fun stepSize(binding: DialogTextOverlayBinding, delta: Int) {
@@ -245,14 +282,27 @@ class TextOverlayDialog : DialogFragment() {
         const val TAG = "TextOverlayDialog"
 
         /**
-         * Fixed point size text is rendered at. It does NOT control on-screen size (the
-         * renderer scales the text bitmap to the overlay box driven by [OverlayItem.scale]);
-         * it only sets the rasterization resolution, kept high so glyphs stay crisp when
-         * scaled up. New text overlays use this; edited ones keep their stored value.
+         * Legacy field value kept for stored-overlay compatibility. It has no effect on
+         * rendering: [com.streamforge.app.overlay.TextOverlayBitmap] picks the rasterization
+         * size from the wrapped text block, and on-screen size comes purely from
+         * [OverlayItem.scale].
          */
         const val RENDER_SP = 48f
 
         /** Progress steps per tap on the −/+ buttons; matches the overlay list's step. */
         private const val SIZE_STEP = 5
+
+        /** Narrowest scroll band the slider offers, as a fraction of the frame width. */
+        private const val MIN_SCROLL_WIDTH = 0.15f
+
+        /** At or above this the band covers the frame and the ticker runs edge to edge. */
+        private const val FULL_WIDTH_THRESHOLD = 0.999f
+
+        fun progressToScrollWidth(progress: Int): Float =
+            MIN_SCROLL_WIDTH + (progress / 100f) * (1f - MIN_SCROLL_WIDTH)
+
+        fun scrollWidthToProgress(width: Float): Int =
+            (((width - MIN_SCROLL_WIDTH) / (1f - MIN_SCROLL_WIDTH)) * 100f)
+                .roundToInt().coerceIn(0, 100)
     }
 }

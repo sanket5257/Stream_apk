@@ -103,6 +103,22 @@ class OverlayEditorView @JvmOverloads constructor(
     private var lastTouchY = 0f
     private var activePointerId = MotionEvent.INVALID_POINTER_ID
 
+    private fun bandWidth(item: OverlayItem.Text): Float =
+        item.scrollWidth.coerceIn(MIN_BAND_WIDTH, 1f)
+
+    /**
+     * Horizontal centre of an overlay's box, as a fraction of the view width. Normally just
+     * its x, but a ticker's band is nudged inward so it never hangs off the frame — mirroring
+     * OverlayRenderer, so the box the user drags matches what's on the stream.
+     */
+    private fun centerXFraction(item: OverlayItem): Float {
+        if (item is OverlayItem.Text && item.scroll) {
+            val w = bandWidth(item)
+            return (item.x - w / 2f).coerceIn(0f, 1f - w) + w / 2f
+        }
+        return item.x
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
@@ -114,7 +130,7 @@ class OverlayEditorView @JvmOverloads constructor(
             if (item is OverlayItem.Browser && !showPlaceholders) return@forEach
 
             canvas.save()
-            canvas.translate(item.x * width, item.y * height)
+            canvas.translate(centerXFraction(item) * width, item.y * height)
             canvas.rotate(item.rotation)
 
             // Box sized exactly like the rendered overlay so the outline/selection border the
@@ -155,8 +171,16 @@ class OverlayEditorView @JvmOverloads constructor(
      * square when the aspect isn't known yet (or no provider, e.g. the test activity).
      */
     private fun halfExtents(item: OverlayItem): Pair<Float, Float> {
-        val boxW = BASE_WIDTH_FRACTION * item.scale * width
         val aspect = (aspectProvider?.invoke(item.id) ?: 1f).coerceAtLeast(0.01f)
+        // Scrolling text is height-driven in OverlayRenderer (a ticker's width grows with the
+        // message, so the slider sets its text height instead). Mirror that here or the touch
+        // box wouldn't match what's on screen.
+        if (item is OverlayItem.Text && item.scroll) {
+            // A ticker's box IS the band its line scrolls inside, so dragging aims the band.
+            val tickerH = TICKER_HEIGHT_FRACTION * item.heightScale * height
+            return (bandWidth(item) * width / 2f) to (tickerH / 2f)
+        }
+        val boxW = BASE_WIDTH_FRACTION * item.scale * width
         // Height is driven independently by heightScale (mirrors OverlayRenderer): at
         // heightScale == scale the box keeps the content aspect; moving them apart stretches.
         val boxH = BASE_WIDTH_FRACTION * item.heightScale * width / aspect
@@ -245,7 +269,7 @@ class OverlayEditorView @JvmOverloads constructor(
         val hitHalfH = halfH.coerceAtLeast(MIN_TOUCH_HALF_PX)
 
         // Translate the touch into the overlay's local (un-rotated) frame around its center.
-        val dx = x - item.x * width
+        val dx = x - centerXFraction(item) * width
         val dy = y - item.y * height
         val theta = Math.toRadians(item.rotation.toDouble())
         val cos = cos(theta).toFloat()
@@ -336,6 +360,13 @@ class OverlayEditorView @JvmOverloads constructor(
         // Overlay width as a fraction of the view width at scale 1.0. Mirrors
         // OverlayRenderer's 20%-of-stream-width base so the editor box matches the stream.
         const val BASE_WIDTH_FRACTION = 0.20f
+
+        // Ticker text height at scale 1.0, as a fraction of the frame height. Mirrors
+        // OverlayRenderer.TICKER_BASE_HEIGHT_PERCENT (8%).
+        const val TICKER_HEIGHT_FRACTION = 0.08f
+
+        // Narrowest scroll band, mirroring OverlayRenderer.MIN_TICKER_BAND_WIDTH.
+        const val MIN_BAND_WIDTH = 0.1f
 
         // Smallest half-extent (px) a touch target may shrink to, so heavily-shrunk
         // overlays stay tappable even when their drawn box is only a few pixels.

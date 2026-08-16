@@ -49,6 +49,13 @@ sealed class OverlayItem {
         val fontKey: String = OverlayFonts.DEFAULT_KEY,
         /** When true the text scrolls horizontally right-to-left, like a news ticker. */
         val scroll: Boolean = false,
+        /**
+         * Width of the band a scrolling ticker travels inside, as a fraction of the frame
+         * width. The band is centred on [x], so dragging the overlay moves it. 1.0 (the
+         * default) means edge-to-edge across the whole frame; anything smaller clips the
+         * text to the band so it enters and exits within that area.
+         */
+        val scrollWidth: Float = 1f,
         override var x: Float = 0.5f,
         override var y: Float = 0.5f,
         override var scale: Float = 1.0f,

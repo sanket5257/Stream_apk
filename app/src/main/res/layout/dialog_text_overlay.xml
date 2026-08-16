@@ -178,6 +178,59 @@
             android:text="@string/text_scroll_label"
             android:textAppearance="@style/TextAppearance.SF.Label" />
 
+        <!-- Scroll track width. Only meaningful while scrolling is on, so the whole group
+             hides with the switch. The track is centred on the overlay, so dragging the
+             overlay in the preview moves the band it scrolls inside. -->
+        <LinearLayout
+            android:id="@+id/scrollAreaGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/text_scroll_area_label"
+                    android:textAppearance="@style/TextAppearance.SF.Overline" />
+
+                <TextView
+                    android:id="@+id/tvScrollAreaValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.SF.Label"
+                    tools:text="100%" />
+
+            </LinearLayout>
+
+            <SeekBar
+                android:id="@+id/seekScrollArea"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progressBackgroundTint="@color/divider"
+                android:progressTint="@color/action_green"
+                android:thumbTint="@color/action_green" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="@string/text_scroll_area_hint"
+                android:textAppearance="@style/TextAppearance.SF.Caption" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
 </ScrollView>

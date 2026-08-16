@@ -3,6 +3,10 @@ package com.streamforge.app.overlay
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -10,7 +14,6 @@ import com.pedro.encoder.input.gl.render.filters.BaseFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.BaseObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.GifObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.ImageObjectFilterRender
-import com.pedro.encoder.input.gl.render.filters.`object`.TextObjectFilterRender
 import com.pedro.library.rtmp.RtmpCamera2
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +23,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
  * Phase 6: Bridges OverlayItem domain model to RootEncoder's GL filter pipeline.
@@ -53,6 +58,11 @@ class OverlayRenderer(
     // the stream aspect (i.e. no correction — the legacy behaviour).
     private val contentAspect = mutableMapOf<String, Float>()
 
+    // Content signature (text + font + colour + scroll) of the bitmap currently uploaded for
+    // each text overlay. Re-rasterizing is expensive and updateOverlay() runs on every drag /
+    // pinch frame and on every verify sweep, so we only redraw when the content really changed.
+    private val textSignatures = mutableMapOf<String, String>()
+
     // Output stream dimensions, needed to convert a content aspect ratio into the
     // independent width%/height% RootEncoder's setScale expects. Updated by the host
     // whenever the configured resolution changes; defaults to a 16:9 frame.
@@ -76,12 +86,12 @@ class OverlayRenderer(
     // forces exactly one re-upload per attach — the automatic equivalent of the toggle.
     private val texturesHealed = mutableSetOf<String>()
 
-    // News-ticker scrolling state. For each scrolling Text overlay we drive its horizontal
-    // position ourselves frame-by-frame instead of using its static x; the map holds the
-    // current left-edge position (percent of stream width). A single repeating runnable
-    // advances every scrolling overlay so one timer covers any number of tickers.
-    private val scrollPositions = mutableMapOf<String, Float>()
+    // News-ticker state. One repeating runnable advances every scrolling overlay, so a single
+    // timer covers any number of tickers.
     private var scrollRunning = false
+
+    // The band-sized strip each ticker's line is drawn onto (see tickScroll).
+    private val tickerStrips = mutableMapOf<String, TickerStrip>()
 
     private val scrollRunnable = object : Runnable {
         override fun run() {
@@ -98,6 +108,62 @@ class OverlayRenderer(
                 mainHandler.postDelayed(this, VERIFY_INTERVAL_MS)
             }
         }
+    }
+
+    // Consecutive watchdog ticks that saw fewer filters in the GL pipeline than we believe
+    // are attached. Requires a streak so a normal drain (one filter action per rendered
+    // frame) isn't mistaken for a lost pipeline.
+    private var detachedStreak = 0
+
+    private val attachWatchdog = object : Runnable {
+        override fun run() {
+            checkStillAttached()
+            // A rebuild inside checkStillAttached() re-arms this runnable via applyOverlays,
+            // so clear any pending tick first — otherwise each rebuild doubles the watchdog.
+            mainHandler.removeCallbacks(this)
+            mainHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+        }
+    }
+
+    /**
+     * Going live tears the GL pipeline down and back up (prepareVideo → stopPreview →
+     * MainRender.release, which releases every filter AND clears its list). Anything that
+     * rebuilds the pipeline after we've re-attached — a late restart, a surface bounce —
+     * leaves our filter handles pointing at objects the renderer no longer draws, and
+     * reconcile() would see them as attached and never re-add them. That's an overlay that
+     * silently vanishes the moment you go live.
+     *
+     * glInterface.filtersCount() is the pipeline's own count, so compare against it and
+     * rebuild from scratch when it says our overlays aren't there.
+     */
+    private fun checkStillAttached() {
+        val expected = filters.size
+        if (expected == 0) {
+            detachedStreak = 0
+            return
+        }
+        val actual = try {
+            rtmpCamera.glInterface.filtersCount()
+        } catch (_: Exception) {
+            return
+        }
+        if (actual >= expected) {
+            detachedStreak = 0
+            return
+        }
+        detachedStreak++
+        if (detachedStreak < WATCHDOG_STRIKES) return
+        detachedStreak = 0
+        android.util.Log.w(
+            "OverlayRenderer",
+            "GL pipeline reports $actual filters but $expected are attached — re-adding overlays"
+        )
+        val items = lastItems
+        // Drops the stale handles; the re-apply then rebuilds every overlay and re-uploads
+        // its texture. Queued-but-unprocessed adds are cancelled by the matching removes,
+        // so this can't leave duplicates behind.
+        onPipelineReset()
+        applyOverlays(items)
     }
 
     /**
@@ -130,6 +196,10 @@ class OverlayRenderer(
         mainHandler.removeCallbacks(verifyRunnable)
         reconcile(items)
         mainHandler.postDelayed(verifyRunnable, VERIFY_INTERVAL_MS)
+        // (Re)arm the watchdog that notices if the GL pipeline drops our filters later on.
+        detachedStreak = 0
+        mainHandler.removeCallbacks(attachWatchdog)
+        mainHandler.postDelayed(attachWatchdog, WATCHDOG_INTERVAL_MS)
     }
 
     private fun reconcile(items: List<OverlayItem>, forceTextureReload: Boolean = false) {
@@ -177,7 +247,7 @@ class OverlayRenderer(
             .filter { it is OverlayItem.Text && it.scroll && it.visible }
             .map { it.id }
             .toSet()
-        scrollPositions.keys.retainAll(activeIds)
+        tickerStrips.keys.retainAll(activeIds)
 
         if (activeIds.isNotEmpty() && !scrollRunning) {
             scrollRunning = true
@@ -189,29 +259,147 @@ class OverlayRenderer(
     }
 
     /**
-     * Advance every scrolling text overlay one frame: move its left edge leftward and wrap
-     * back to the right edge once it has fully exited on the left.
+     * Advance every scrolling text overlay one frame.
+     *
+     * A ticker is ONE unbroken horizontal line, whatever its length — so it is never routed
+     * through the wrapped-text rasterizer. Instead the quad is pinned to the ticker's band and
+     * we draw the line straight into a band-sized strip at a shifting offset, re-uploading it
+     * each frame. That gives exact clipping at the band's edges (RootEncoder has no per-filter
+     * clip) and, because only the band is ever a texture, no message is long enough to hit the
+     * GL texture-size cap — which is what used to force a long ticker to wrap onto two lines.
      */
     private fun tickScroll() {
         lastItems.forEach { item ->
             if (item !is OverlayItem.Text || !item.scroll || !item.visible) return@forEach
-            val filter = filters[item.id] as? BaseObjectFilterRender ?: return@forEach
-            val widthPercent = 20f * item.scale
-            var x = scrollPositions[item.id] ?: 100f
-            x -= SCROLL_SPEED_PERCENT_PER_FRAME
-            // Wrap once the whole overlay has slid off the left edge.
-            if (x <= -widthPercent) x = 100f
-            scrollPositions[item.id] = x
-            val topLeftY = (item.y * 100f) - (heightPercentFor(item) / 2f)
+            val filter = filters[item.id] as? ImageObjectFilterRender ?: return@forEach
             // This runs on the ticker's own repeating runnable, OUTSIDE reconcile's per-item
             // guard. A filter torn down by a visibility toggle can throw here — an uncaught
             // exception on this loop crashes the whole app (the "toggling kicks me back to
             // Home" symptom, since a restart re-routes through Login → Home). Isolate it.
             try {
-                filter.setPosition(x, topLeftY)
+                advanceTicker(item, filter)
             } catch (e: Exception) {
-                android.util.Log.e("OverlayRenderer", "tickScroll setPosition failed for ${item.id}", e)
+                android.util.Log.e("OverlayRenderer", "tickScroll failed for ${item.id}", e)
+            } catch (e: OutOfMemoryError) {
+                // Strip allocation under memory pressure: drop it and coast on the last frame.
+                android.util.Log.e("OverlayRenderer", "ticker strip OOM for ${item.id}", e)
+                tickerStrips.remove(item.id)
             }
+        }
+    }
+
+    /** Redraw a ticker's strip one step further left and re-upload it. */
+    private fun advanceTicker(item: OverlayItem.Text, filter: ImageObjectFilterRender) {
+        val band = tickerBand(item)
+        val bandWidthPx = band.width * streamWidth
+        val bandHeightPx = heightPercentFor(item) / 100f * streamHeight
+        if (bandWidthPx < 1f || bandHeightPx < 1f) return
+
+        // The strip maps 1:1 onto the band, so rendering it any larger would only cost upload
+        // bandwidth. Text is drawn into it at the band's own resolution.
+        val stripWidth = bandWidthPx.roundToInt().coerceIn(64, MAX_STRIP_WIDTH_PX)
+        val stripHeight = (stripWidth * bandHeightPx / bandWidthPx).roundToInt()
+            .coerceIn(8, MAX_STRIP_HEIGHT_PX)
+
+        var strip = tickerStrips[item.id]
+        if (strip == null || strip.width != stripWidth || strip.height != stripHeight) {
+            strip = TickerStrip(stripWidth, stripHeight)
+            tickerStrips[item.id] = strip
+        }
+        strip.configure(item)
+
+        val textWidth = strip.textWidth
+        if (textWidth <= 0f) return
+
+        // Same on-screen speed as before, expressed in strip pixels.
+        val step = (SCROLL_SPEED_PERCENT_PER_FRAME / 100f) * streamWidth *
+            (stripWidth / bandWidthPx)
+
+        var offset = strip.offset
+        if (offset.isNaN()) offset = stripWidth.toFloat()
+        offset -= step
+        // Wrap once the line has fully exited on the left.
+        if (offset <= -textWidth) offset = stripWidth.toFloat()
+        strip.offset = offset
+
+        filter.setImage(strip.draw())
+    }
+
+    /**
+     * Left edge and width of a ticker's band, both fractions of the frame width. The band is
+     * centred on the overlay (so dragging it aims the band) and nudged inward so it never
+     * hangs off the frame; the default width of 1.0 is the whole frame, edge to edge.
+     */
+    private fun tickerBand(item: OverlayItem.Text): Band {
+        val width = item.scrollWidth.coerceIn(MIN_TICKER_BAND_WIDTH, 1f)
+        val left = (item.x - width / 2f).coerceIn(0f, 1f - width)
+        return Band(left, width)
+    }
+
+    private data class Band(val left: Float, val width: Float)
+
+    /**
+     * Double-buffered scratch strip for a ticker, with the text drawn straight onto it.
+     * Two buffers so we're never drawing into the same bitmap the GL thread is uploading for
+     * the frame in flight.
+     */
+    private class TickerStrip(val width: Int, val height: Int) {
+        private val buffers = arrayOf(
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888),
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        )
+        private val canvases = arrayOf(Canvas(buffers[0]), Canvas(buffers[1]))
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private var next = 0
+
+        private var signature = ""
+        private var line = ""
+        private var baseline = 0f
+
+        private companion object {
+            /** Share of the band's height one line of type fills; the rest is headroom. */
+            const val TEXT_FILL = 0.9f
+        }
+
+        /** Current left edge of the line within the strip, in strip pixels. NaN until started. */
+        var offset: Float = Float.NaN
+            set(value) { field = value }
+
+        /** Width of the rendered line in strip pixels. */
+        var textWidth: Float = 0f
+            private set
+
+        /** Re-measure only when the text, font or colour actually changed. */
+        fun configure(item: OverlayItem.Text) {
+            val sig = "${item.text}|${item.fontKey}|${item.colorArgb}"
+            if (sig == signature) return
+            signature = sig
+            // One line: hard newlines become spaces so nothing can break the strip.
+            line = item.text.replace('\n', ' ').replace('\r', ' ').trim()
+            paint.typeface = OverlayFonts.typefaceFor(item.fontKey)
+            paint.color = item.colorArgb
+            // Scale the type so one line of it fills the strip's height, less a little
+            // headroom — Devanagari conjuncts and matras reach past the nominal metrics and
+            // would otherwise clip against the band's edges.
+            paint.textSize = height.toFloat()
+            val fm = paint.fontMetrics
+            val lineHeight = (fm.descent - fm.ascent).coerceAtLeast(1f)
+            paint.textSize = (height * height / lineHeight * TEXT_FILL).coerceAtLeast(1f)
+            val scaled = paint.fontMetrics
+            // Centre the line vertically in whatever headroom is left.
+            baseline = (height - (scaled.descent - scaled.ascent)) / 2f - scaled.ascent
+            textWidth = paint.measureText(line)
+            // Restart the run so the new text enters from the right rather than mid-flight.
+            offset = Float.NaN
+        }
+
+        fun draw(): Bitmap {
+            val index = next
+            next = (next + 1) % buffers.size
+            val target = buffers[index]
+            target.eraseColor(Color.TRANSPARENT)
+            canvases[index].drawText(line, offset, baseline, paint)
+            return target
         }
     }
 
@@ -230,7 +418,7 @@ class OverlayRenderer(
             return
         }
         try {
-            if (item is OverlayItem.Text && filter is TextObjectFilterRender) {
+            if (item is OverlayItem.Text && filter is ImageObjectFilterRender) {
                 applyText(filter, item)
             }
             applyTransform(filter, item)
@@ -243,7 +431,7 @@ class OverlayRenderer(
 
     private fun addOverlay(item: OverlayItem) {
         when (item) {
-            is OverlayItem.Text -> attachFilter(item, buildTextFilter(item))
+            is OverlayItem.Text -> buildTextFilter(item)?.let { attachFilter(item, it) }
             is OverlayItem.Video -> attachFilter(item, buildVideoFilter(item))
             is OverlayItem.Image -> loadAndAttachImage(item)
             is OverlayItem.Gif -> loadAndAttachGif(item)
@@ -342,7 +530,7 @@ class OverlayRenderer(
             // Timing-proof backstop: re-upload this overlay's texture shortly after the
             // attach lands, in case the first GL upload raced the render thread and came
             // out blank. Deduped via texturesHealed so it fires at most once per attach.
-            if (item is OverlayItem.Image || item is OverlayItem.Gif) {
+            if (item is OverlayItem.Image || item is OverlayItem.Gif || item is OverlayItem.Text) {
                 mainHandler.postDelayed({ healTextureOnce(item) }, VERIFY_INTERVAL_MS)
             }
             android.util.Log.d("OverlayRenderer", "Successfully attached filter for ${item.id}")
@@ -357,6 +545,9 @@ class OverlayRenderer(
     fun removeOverlay(id: String) {
         pendingLoads.remove(id)?.cancel()
         texturesHealed.remove(id)
+        // Strip buffers are dropped, never recycled: the GL thread may still be uploading the
+        // last frame's buffer. Letting the GC take them is the safe way out.
+        tickerStrips.remove(id)
         val filter = filters.remove(id) ?: return
         try {
             rtmpCamera.glInterface.removeFilter(filter)
@@ -380,7 +571,7 @@ class OverlayRenderer(
     fun onPipelineReset() {
         mainHandler.removeCallbacksAndMessages(null)
         scrollRunning = false
-        scrollPositions.clear()
+        tickerStrips.clear()
         pendingLoads.values.forEach { it.cancel() }
         pendingLoads.clear()
         filters.keys.toList().forEach { id ->
@@ -393,6 +584,8 @@ class OverlayRenderer(
         browserSources.values.forEach { it.release() }
         browserSources.clear()
         texturesHealed.clear()
+        // Every filter is gone, so each text overlay needs a fresh rasterize + upload.
+        textSignatures.clear()
     }
 
     /**
@@ -415,7 +608,11 @@ class OverlayRenderer(
     private fun reloadTexture(item: OverlayItem): Boolean {
         val filter = filters[item.id] ?: return false
         return when {
-            item is OverlayItem.Image && filter is ImageObjectFilterRender -> {
+            // A ticker re-uploads its strip every frame, so there is nothing to heal — and it
+            // has no text bitmap of its own to push.
+            item is OverlayItem.Text && item.scroll -> false
+            (item is OverlayItem.Image || item is OverlayItem.Text) &&
+                filter is ImageObjectFilterRender -> {
                 val bmp = bitmaps[item.id]
                 if (bmp != null && !bmp.isRecycled) {
                     filter.setImage(bmp)
@@ -446,6 +643,7 @@ class OverlayRenderer(
         bitmaps.remove(id)?.recycle()
         gifBytes.remove(id)
         contentAspect.remove(id)
+        textSignatures.remove(id)
     }
 
     /**
@@ -454,7 +652,7 @@ class OverlayRenderer(
     fun release() {
         mainHandler.removeCallbacksAndMessages(null)
         scrollRunning = false
-        scrollPositions.clear()
+        tickerStrips.clear()
         pendingLoads.values.forEach { it.cancel() }
         pendingLoads.clear()
         filters.keys.toList().forEach { id ->
@@ -471,6 +669,7 @@ class OverlayRenderer(
         gifBytes.clear()
         contentAspect.clear()
         texturesHealed.clear()
+        textSignatures.clear()
         scope.cancel()
     }
 
@@ -479,30 +678,47 @@ class OverlayRenderer(
         // Browser/URL overlays are a full-canvas layer — always edge-to-edge. Its page
         // content is fit to the full frame in BrowserOverlaySource, so the quad is just 100%.
         if (item is OverlayItem.Browser) {
-            filter.setPosition(0f, 0f)
             filter.setScale(100f, 100f)
+            filter.setPosition(0f, 0f)
             filter.setRotation(0)
             return
         }
         // Width as a percent of the stream width: scale=1.0 → 20% wide.
-        val widthPercent = 20f * item.scale
+        val widthPercent = widthPercentFor(item)
         // Height as an INDEPENDENT percent of the stream height (driven by heightScale).
         // When scale == heightScale the content keeps its real aspect ratio; moving the two
         // sliders apart stretches it. Browser overlays default both to 5.0 → 100% × 100%.
         val heightPercent = heightPercentFor(item)
         val topLeftY = (item.y * 100f) - (heightPercent / 2f)
+        // Scale FIRST: RootEncoder's Sprite.scale() rewrites the stored position by the
+        // old/new scale ratio, so a position set before it lands off-target whenever the size
+        // changed (a resize, or text whose aspect was just re-measured). Positioning last
+        // always writes the real percentage.
+        filter.setScale(widthPercent, heightPercent)
         if (item is OverlayItem.Text && item.scroll) {
-            // The ticker loop owns the horizontal position; seed it (off the right edge)
-            // and let tickScroll drive it from here so the two don't fight.
-            val x = scrollPositions.getOrPut(item.id) { 100f }
-            filter.setPosition(x, topLeftY)
+            // The quad is pinned to the ticker's band; the text scrolls inside the strip we
+            // composite, so there is no quad motion for the ticker loop to own.
+            filter.setPosition(tickerBand(item).left * 100f, topLeftY)
         } else {
             val topLeftX = (item.x * 100f) - (widthPercent / 2f)
             filter.setPosition(topLeftX, topLeftY)
-            scrollPositions.remove(item.id)
         }
-        filter.setScale(widthPercent, heightPercent)
         filter.setRotation(item.rotation.toInt())
+    }
+
+    /**
+     * Width percent (of stream width): scale = 1.0 → 20% wide.
+     *
+     * A scrolling ticker is the exception: it's one long strip whose aspect grows with the
+     * message, so pinning its WIDTH would shrink the glyphs to nothing as the text gets
+     * longer (and the whole strip has to travel off-frame anyway). For tickers the size
+     * slider drives the text HEIGHT and the width follows from the aspect.
+     */
+    private fun widthPercentFor(item: OverlayItem): Float {
+        // A ticker's quad IS its band — the text scrolls inside it, so the quad's width is the
+        // band's, not the message's.
+        if (item is OverlayItem.Text && item.scroll) return tickerBand(item).width * 100f
+        return 20f * item.scale
     }
 
     /**
@@ -511,34 +727,90 @@ class OverlayRenderer(
      * stream/content aspect ratio so that at heightScale == scale the content is undistorted:
      * the pixel box (20%·scale·streamW) × (heightPercent%·streamH) then has the content's own
      * aspect. Falls back to the uncorrected base if the content aspect isn't known yet.
+     * Scrolling text is height-driven instead (see [widthPercentFor]).
      */
     private fun heightPercentFor(item: OverlayItem): Float {
+        if (item is OverlayItem.Text && item.scroll) {
+            return TICKER_BASE_HEIGHT_PERCENT * item.heightScale
+        }
         val base = 20f * item.heightScale
         val aspect = contentAspect[item.id] ?: return base
         if (aspect <= 0f) return base
-        val streamAspect = streamWidth.toFloat() / streamHeight.toFloat()
-        return base * streamAspect / aspect
+        return base * streamAspect() / aspect
     }
 
-    private fun buildTextFilter(item: OverlayItem.Text): TextObjectFilterRender {
-        val filter = TextObjectFilterRender()
-        applyText(filter, item)
-        return filter
+    private fun streamAspect(): Float = streamWidth.toFloat() / streamHeight.toFloat()
+
+    /**
+     * Text overlays are drawn as plain textured quads: we rasterize the text ourselves
+     * ([TextOverlayBitmap]) and hand the bitmap to an ImageObjectFilterRender, rather than
+     * using the library's TextObjectFilterRender — see [TextOverlayBitmap] for why (word
+     * wrapping, bounded texture size, and no OutOfMemoryError on long strings).
+     * Returns null if the text couldn't be rasterized, so the caller skips the attach.
+     */
+    private fun buildTextFilter(item: OverlayItem.Text): ImageObjectFilterRender? {
+        val filter = ImageObjectFilterRender()
+        // Fresh filter: force a rasterize even if the content is unchanged, since the new
+        // filter instance has no texture of its own yet.
+        textSignatures.remove(item.id)
+        return if (applyText(filter, item)) filter else null
     }
 
     /**
-     * Render the overlay's text into the filter at high resolution with the chosen font.
-     * The library builds the text bitmap at the given pixel size, then the GPU scales it
-     * to fit our overlay box — so we render well above on-screen size to stay crisp
-     * (this is what fixes blurry text, especially complex Devanagari/Marathi glyphs).
-     * Also records the text's true aspect ratio so the box isn't stretched.
+     * Rasterize the overlay's text and upload it, recording its true aspect ratio so the box
+     * isn't stretched. No-ops when the text, font, colour and scroll mode are unchanged —
+     * this runs on every drag/pinch frame and every verify sweep.
+     * Returns true if the filter has a valid texture afterwards.
      */
-    private fun applyText(filter: TextObjectFilterRender, item: OverlayItem.Text) {
-        val density = context.resources.displayMetrics.density
-        val renderPx = (item.fontSizeSp * density * TEXT_QUALITY_MULTIPLIER)
-            .coerceIn(MIN_TEXT_RENDER_PX, MAX_TEXT_RENDER_PX)
-        filter.setText(item.text, renderPx, item.colorArgb, OverlayFonts.typefaceFor(item.fontKey))
-        contentAspect[item.id] = OverlayFonts.textAspect(item.text, item.fontKey)
+    private fun applyText(filter: ImageObjectFilterRender, item: OverlayItem.Text): Boolean {
+        // A ticker's texture is the strip its line is drawn onto, rebuilt every frame by the
+        // scroll loop — there is nothing to rasterize here, and uploading a wrapped block
+        // would be exactly the wrong picture. The strip re-measures itself when the text,
+        // font or colour changes.
+        if (item.scroll) return true
+
+        val target = textTargetPx(item)
+        val signature = textSignature(item, target)
+        val current = bitmaps[item.id]
+        if (textSignatures[item.id] == signature && current != null && !current.isRecycled) {
+            return true
+        }
+        val rendered = TextOverlayBitmap.render(
+            text = item.text,
+            fontKey = item.fontKey,
+            colorArgb = item.colorArgb,
+            targetPx = target
+        ) ?: return false
+
+        // The previous bitmap is deliberately NOT recycled: the GL thread may still be
+        // reading it for the frame in flight. Dropping the reference lets the GC take it.
+        bitmaps[item.id] = rendered.bitmap
+        contentAspect[item.id] = rendered.aspect
+        textSignatures[item.id] = signature
+        filter.setImage(rendered.bitmap)
+        return true
+    }
+
+    private fun textSignature(item: OverlayItem.Text, targetPx: Float): String =
+        "${item.text}|${item.fontKey}|${item.colorArgb}|${targetPx.toInt()}"
+
+    /**
+     * Resolution to rasterize this overlay's text at, in output pixels: the size it actually
+     * occupies on the frame, supersampled a little so it stays crisp.
+     *
+     * Rendering every text overlay at a fixed maximum instead would allocate several MB per
+     * overlay no matter how small it is on screen — an allocation that lands exactly when Go
+     * Live is also claiming encoder, camera and GL buffers.
+     *
+     * Quantized to [TEXT_TARGET_STEP_PX] buckets so dragging the size slider re-rasterizes a
+     * handful of times across its whole range, not on every frame.
+     */
+    private fun textTargetPx(item: OverlayItem.Text): Float {
+        // Static text only — tickers draw straight onto their strip. Sized by the width of
+        // the text's box on the frame.
+        val raw = (20f * item.scale / 100f) * streamWidth * TEXT_SUPERSAMPLE
+        val stepped = ceil(raw / TEXT_TARGET_STEP_PX) * TEXT_TARGET_STEP_PX
+        return stepped.coerceIn(TEXT_TARGET_STEP_PX, MAX_TEXT_TARGET_PX)
     }
 
     private fun buildVideoFilter(item: OverlayItem.Video): BaseObjectFilterRender {
@@ -616,13 +888,32 @@ class OverlayRenderer(
         const val BROWSER_RENDER_W = 2560
         const val BROWSER_RENDER_H = 1440
 
-        // Text overlays are rendered to a bitmap at this multiple of their on-screen point
-        // size (× display density), then GPU-scaled into the overlay box. Rendering well
-        // above display size keeps glyphs sharp — Devanagari/Marathi conjuncts especially.
-        // High caps so even large text stays razor-sharp.
-        const val TEXT_QUALITY_MULTIPLIER = 3.0f
-        const val MIN_TEXT_RENDER_PX = 96f
-        const val MAX_TEXT_RENDER_PX = 640f
+        // Ticker (scrolling text) height at scale 1.0, as a percent of the stream height —
+        // ~8% is a broadcast-style lower third on a 1080p frame. The size slider multiplies it.
+        const val TICKER_BASE_HEIGHT_PERCENT = 8f
+
+        // Text is rasterized at this multiple of its on-screen size, so the GPU only ever
+        // downscales it (upscaling a glyph texture is what looks soft).
+        const val TEXT_SUPERSAMPLE = 1.5f
+        // Bucket size for that target, so a slider drag re-rasterizes a few times, not always.
+        const val TEXT_TARGET_STEP_PX = 512f
+        const val MAX_TEXT_TARGET_PX = 3072f
+
+        // Banded tickers: narrowest band the renderer honours, and the point at which a band
+        // is treated as edge-to-edge (which takes the cheaper quad-sliding path instead).
+        const val MIN_TICKER_BAND_WIDTH = 0.1f
+        const val FULL_BAND_THRESHOLD = 0.999f
+
+        // Caps on the composited strip. It maps 1:1 onto the band, so these only bite on very
+        // large frames; they bound the per-frame texture upload.
+        const val MAX_STRIP_WIDTH_PX = 2048
+        const val MAX_STRIP_HEIGHT_PX = 512
+
+        // Attachment watchdog: how often to compare our filter map against the pipeline's own
+        // count, and how many consecutive mismatches before rebuilding. Filter actions drain
+        // one per rendered frame, so a couple of seconds of disagreement means genuinely lost.
+        const val WATCHDOG_INTERVAL_MS = 1000L
+        const val WATCHDOG_STRIKES = 2
 
         // Self-heal sweep: re-reconcile at t = 300ms and 600ms after each change.
         // Bounded (no infinite loop); reconcile is idempotent for already-attached

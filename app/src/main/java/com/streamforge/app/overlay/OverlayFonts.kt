@@ -1,6 +1,5 @@
 package com.streamforge.app.overlay
 
-import android.graphics.Paint
 import android.graphics.Typeface
 
 /**
@@ -45,21 +44,4 @@ object OverlayFonts {
 
     fun keyForLabel(label: String?): String =
         ALL.firstOrNull { it.label == label }?.key ?: DEFAULT_KEY
-
-    /**
-     * The aspect ratio (width / height) that RootEncoder's TextStreamObject produces for
-     * this text, computed with the same Paint geometry the library uses
-     * (width = measureText, height = descent − ascent). Aspect is scale-invariant, so any
-     * text size works; we just need it to size the overlay box without distortion.
-     */
-    fun textAspect(text: String, fontKey: String?): Float {
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 100f
-            typeface = typefaceFor(fontKey)
-        }
-        val width = paint.measureText(text).coerceAtLeast(1f)
-        val fm = paint.fontMetrics
-        val height = (fm.descent - fm.ascent).coerceAtLeast(1f)
-        return width / height
-    }
 }
