@@ -31,8 +31,8 @@ android {
         targetSdk = 34
         // versionCode is the ONLY value Android compares when installing an update — it must
         // increase every release or the install is rejected as a downgrade. See RELEASING.md.
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
