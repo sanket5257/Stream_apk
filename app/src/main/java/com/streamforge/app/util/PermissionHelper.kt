@@ -3,8 +3,6 @@ package com.streamforge.app.util
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import androidx.activity.ComponentActivity
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 
 /**
@@ -13,7 +11,17 @@ import androidx.core.content.ContextCompat
  */
 object PermissionHelper {
 
-    private val REQUIRED_PERMISSIONS = arrayOf(
+    /**
+     * Permissions the camera pipeline needs. Public so callers can register their own
+     * launcher as an activity FIELD.
+     *
+     * This deliberately no longer offers a "request" helper that registers a launcher on
+     * demand: `registerForActivityResult` throws IllegalStateException ("LifecycleOwners must
+     * call register before they are STARTED") whenever it runs after the activity has started,
+     * which made any late or repeat permission request a crash. Registering at field-init time
+     * is the only form the Activity Result API actually supports.
+     */
+    val REQUIRED_PERMISSIONS = arrayOf(
         Manifest.permission.CAMERA,
         Manifest.permission.RECORD_AUDIO
     )
@@ -25,25 +33,5 @@ object PermissionHelper {
         return REQUIRED_PERMISSIONS.all { permission ->
             ContextCompat.checkSelfPermission(ctx, permission) == PackageManager.PERMISSION_GRANTED
         }
-    }
-
-    /**
-     * Request camera and audio permissions.
-     * Must be called before onCreate completes (during initialization).
-     *
-     * @param activity The ComponentActivity requesting permissions
-     * @param onResult Callback with true if all permissions granted, false otherwise
-     */
-    fun requestCameraAndAudio(
-        activity: ComponentActivity,
-        onResult: (granted: Boolean) -> Unit
-    ) {
-        val launcher = activity.registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions()
-        ) { permissions ->
-            val allGranted = permissions.entries.all { it.value }
-            onResult(allGranted)
-        }
-        launcher.launch(REQUIRED_PERMISSIONS)
     }
 }

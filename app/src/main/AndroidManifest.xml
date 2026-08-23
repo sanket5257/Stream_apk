@@ -30,12 +30,18 @@
         android:name="android.hardware.microphone"
         android:required="false" />
 
+    <!-- largeHeap: a live broadcast holds the camera pipeline, a hardware encoder, GL overlay
+         textures and (for URL overlays) a 1080p software-rendered WebView at the same time. On
+         a phone with a small per-app heap that combination is what pushed overlay/bitmap work
+         into OutOfMemoryError. The allocations themselves are now bounded (see
+         OverlayThumbnails and OverlayRenderer.maxOverlayEdgePx); this is headroom on top. -->
     <application
         android:name=".StreamForgeApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
+        android:largeHeap="true"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
@@ -68,12 +74,6 @@
         <!-- Advanced RTMP/quality config + go-live entry (existing pipeline) -->
         <activity
             android:name=".MainActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- Device management activity -->
-        <activity
-            android:name=".auth.DeviceManagerActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 

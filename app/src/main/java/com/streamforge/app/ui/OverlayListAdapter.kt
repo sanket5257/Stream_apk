@@ -1,9 +1,6 @@
 package com.streamforge.app.ui
 
 import android.annotation.SuppressLint
-import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
-import android.net.Uri
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.ViewGroup
@@ -313,37 +310,18 @@ class OverlayListAdapter(
         private fun transformDetails(scale: Float, heightScale: Float): String =
             "W %.1fx · H %.1fx".format(scale, heightScale)
 
+        // Thumbnails are decoded small, off the main thread and cached — see OverlayThumbnails
+        // for why doing it inline was both an OutOfMemoryError and a scroll stall.
         private fun loadImageThumbnail(uriString: String) {
-            try {
-                val uri = Uri.parse(uriString)
-                binding.root.context.contentResolver.openInputStream(uri).use { stream ->
-                    val bitmap = BitmapFactory.decodeStream(stream)
-                    if (bitmap != null) {
-                        binding.ivOverlayIcon.setImageBitmap(bitmap)
-                    } else {
-                        binding.ivOverlayIcon.setImageResource(R.drawable.ic_image)
-                    }
-                }
-            } catch (_: Exception) {
-                binding.ivOverlayIcon.setImageResource(R.drawable.ic_image)
-            }
+            OverlayThumbnails.load(
+                binding.ivOverlayIcon, uriString, isVideo = false, fallbackRes = R.drawable.ic_image
+            )
         }
 
         private fun loadVideoThumbnail(uriString: String) {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(binding.root.context, Uri.parse(uriString))
-                val frame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                if (frame != null) {
-                    binding.ivOverlayIcon.setImageBitmap(frame)
-                } else {
-                    binding.ivOverlayIcon.setImageResource(R.drawable.ic_video)
-                }
-            } catch (_: Exception) {
-                binding.ivOverlayIcon.setImageResource(R.drawable.ic_video)
-            } finally {
-                try { retriever.release() } catch (_: Exception) { }
-            }
+            OverlayThumbnails.load(
+                binding.ivOverlayIcon, uriString, isVideo = true, fallbackRes = R.drawable.ic_video
+            )
         }
     }
 
@@ -352,8 +330,20 @@ class OverlayListAdapter(
         private const val MAX_SCALE = 5.0f
         private const val SIZE_STEP = 5
 
-        fun scaleToProgress(scale: Float): Int =
-            ((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE) * 100f).roundToInt().coerceIn(0, 100)
+        /**
+         * Map a stored scale onto the 0..100 slider.
+         *
+         * The clamp happens BEFORE rounding on purpose: `Float.roundToInt()` throws
+         * IllegalArgumentException("Cannot round NaN value") rather than returning anything,
+         * and a NaN scale is reachable from a persisted overlay (a gesture computed against a
+         * zero-width view divides by zero). Binding a row must never be able to throw.
+         */
+        fun scaleToProgress(scale: Float): Int {
+            val safe = if (scale.isFinite()) scale else 1f
+            return ((safe - MIN_SCALE) / (MAX_SCALE - MIN_SCALE) * 100f)
+                .coerceIn(0f, 100f)
+                .roundToInt()
+        }
 
         fun progressToScale(progress: Int): Float =
             MIN_SCALE + (progress / 100f) * (MAX_SCALE - MIN_SCALE)

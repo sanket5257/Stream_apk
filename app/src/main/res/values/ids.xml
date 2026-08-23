@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- View tag slot used by OverlayThumbnails to remember which URI an ImageView is
+         loading, so a recycled RecyclerView row never shows the previous row's bitmap.
+         setTag(Object) without a key id would collide with other tag users on the view. -->
+    <item name="overlay_thumbnail_uri_tag" type="id" />
+</resources>

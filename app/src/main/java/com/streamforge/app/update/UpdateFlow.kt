@@ -5,10 +5,10 @@ import android.content.Context
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.lifecycleScope
 import com.streamforge.app.BuildConfig
+import com.streamforge.app.util.isUiAlive
+import com.streamforge.app.util.safeLaunch
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
  */
 object UpdateFlow {
 
+    private const val TAG = "UpdateFlow"
     private const val PREFS = "update_prefs"
     private const val KEY_LAST_CHECK = "last_check_ms"
     private const val KEY_SKIPPED_VERSION = "skipped_version_code"
@@ -40,15 +41,15 @@ object UpdateFlow {
         val prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (now - prefs.getLong(KEY_LAST_CHECK, 0L) < SILENT_INTERVAL_MS) return
 
-        owner.lifecycleScope.launch {
+        owner.safeLaunch(TAG, "update flow") {
             val result = UpdateManager.check()
             prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
-            if (activity.isFinishing || activity.isDestroyed) return@launch
-            if (result !is UpdateManager.CheckResult.Available) return@launch
+            if (!owner.isUiAlive()) return@safeLaunch
+            if (result !is UpdateManager.CheckResult.Available) return@safeLaunch
             val release = result.release
             if (!release.mandatory &&
                 prefs.getInt(KEY_SKIPPED_VERSION, -1) == release.versionCode
-            ) return@launch
+            ) return@safeLaunch
             offer(activity, release)
         }
     }
@@ -56,15 +57,16 @@ object UpdateFlow {
     /** Check because the user asked. Reports every outcome, including "you're up to date". */
     fun checkManually(activity: Activity, onFinished: () -> Unit = {}) {
         val owner = activity as? LifecycleOwner ?: return
-        val progress = AlertDialog.Builder(activity)
-            .setMessage("Checking for updates…")
-            .setCancelable(false)
-            .show()
+        val progress = showSafely(
+            AlertDialog.Builder(activity)
+                .setMessage("Checking for updates…")
+                .setCancelable(false)
+        ) ?: return
 
-        owner.lifecycleScope.launch {
+        owner.safeLaunch(TAG, "update flow") {
             val result = UpdateManager.check()
-            progress.dismiss()
-            if (activity.isFinishing || activity.isDestroyed) return@launch
+            dismissSafely(progress)
+            if (!owner.isUiAlive()) return@safeLaunch
             when (result) {
                 is UpdateManager.CheckResult.Available -> offer(activity, result.release)
                 is UpdateManager.CheckResult.UpToDate -> Toast.makeText(
@@ -97,27 +99,51 @@ object UpdateFlow {
                     .apply()
             }
         }
-        dialog.show()
+        showSafely(dialog)
+    }
+
+    /**
+     * Show a dialog, tolerating a window that's already gone.
+     *
+     * Every dialog here appears after a network round-trip, so the activity can be on its way
+     * out by the time we get back — and a dialog on a dead window token throws
+     * BadTokenException. An update prompt is never worth crashing over.
+     */
+    private fun showSafely(builder: AlertDialog.Builder): AlertDialog? = try {
+        builder.show()
+    } catch (t: Throwable) {
+        android.util.Log.w(TAG, "Couldn't show update dialog", t)
+        null
+    }
+
+    /** Dismissing a dialog whose activity has already gone away throws; it's never important. */
+    private fun dismissSafely(dialog: AlertDialog?) {
+        try {
+            dialog?.dismiss()
+        } catch (t: Throwable) {
+            android.util.Log.w(TAG, "Couldn't dismiss update dialog", t)
+        }
     }
 
     private fun startDownload(activity: Activity, release: UpdateManager.Release) {
         val owner = activity as? LifecycleOwner ?: return
-        val progress = AlertDialog.Builder(activity)
-            .setTitle("Downloading v${release.versionName}")
-            .setMessage("0%")
-            .setCancelable(false)
-            .show()
+        val progress = showSafely(
+            AlertDialog.Builder(activity)
+                .setTitle("Downloading v${release.versionName}")
+                .setMessage("0%")
+                .setCancelable(false)
+        ) ?: return
 
-        owner.lifecycleScope.launch {
+        owner.safeLaunch(TAG, "update flow") {
             val file = UpdateManager.download(activity, release) { percent ->
                 // download() reports from an IO thread; the dialog is main-thread only.
-                owner.lifecycleScope.launch(Dispatchers.Main) {
+                owner.safeLaunch(TAG, "update progress") {
                     progress.setMessage("$percent%")
                 }
             }
             withContext(Dispatchers.Main) {
-                progress.dismiss()
-                if (activity.isFinishing || activity.isDestroyed) return@withContext
+                dismissSafely(progress)
+                if (!owner.isUiAlive()) return@withContext
                 if (file == null) {
                     Toast.makeText(activity, "Download failed", Toast.LENGTH_LONG).show()
                     return@withContext
@@ -125,20 +151,37 @@ object UpdateFlow {
                 if (!UpdateManager.canRequestInstalls(activity)) {
                     // Android 8+ gates sideloading per source; send the user to grant it, then
                     // they can tap the update again.
-                    AlertDialog.Builder(activity)
-                        .setTitle("Allow installs")
-                        .setMessage(
-                            "Android needs your permission to install updates from StreamForge. " +
-                                "Turn on \"Allow from this source\", then tap Update again."
-                        )
-                        .setPositiveButton("Open settings") { _, _ ->
-                            activity.startActivity(UpdateManager.installPermissionIntent(activity))
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
+                    showSafely(
+                        AlertDialog.Builder(activity)
+                            .setTitle("Allow installs")
+                            .setMessage(
+                                "Android needs your permission to install updates from StreamForge. " +
+                                    "Turn on \"Allow from this source\", then tap Update again."
+                            )
+                            .setPositiveButton("Open settings") { _, _ ->
+                                // No install-sources screen on some OEM ROMs — don't crash on it.
+                                try {
+                                    activity.startActivity(UpdateManager.installPermissionIntent(activity))
+                                } catch (t: Throwable) {
+                                    android.util.Log.w(TAG, "No install-sources settings screen", t)
+                                    Toast.makeText(
+                                        activity,
+                                        "Open Settings → Apps → StreamForge → Install unknown apps",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                            .setNegativeButton("Cancel", null)
+                    )
                     return@withContext
                 }
-                UpdateManager.install(activity, file)
+                try {
+                    UpdateManager.install(activity, file)
+                } catch (t: Throwable) {
+                    // FileProvider misconfiguration or a missing package installer.
+                    android.util.Log.e(TAG, "Handing the APK to the installer failed", t)
+                    Toast.makeText(activity, "Couldn't open the installer", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }

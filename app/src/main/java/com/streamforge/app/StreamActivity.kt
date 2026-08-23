@@ -11,9 +11,9 @@ import android.os.Looper
 import android.view.SurfaceHolder
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.pedro.encoder.input.video.CameraHelper
@@ -32,7 +32,8 @@ import com.streamforge.app.stream.StreamManager
 import com.streamforge.app.stream.StreamState
 import com.streamforge.app.ui.OverlayManagerBottomSheet
 import com.streamforge.app.util.PermissionHelper
-import kotlinx.coroutines.launch
+import com.streamforge.app.util.isUiAlive
+import com.streamforge.app.util.safeLaunch
 
 /**
  * Phase 2A: Camera preview with front/back switching.
@@ -61,13 +62,38 @@ class StreamActivity : AppCompatActivity() {
     // — and with it the GL pipeline / encoder feed — is recreated.
     private var pendingStreamRecovery = false
     
+    /**
+     * Registered as a field, which is the only point in an activity's life where the Activity
+     * Result API allows it — registering later (e.g. from inside a permission-check branch
+     * that runs after the activity has started) throws IllegalStateException.
+     */
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        if (grants.values.all { it }) {
+            initializeCamera()
+        } else {
+            Toast.makeText(this, R.string.permission_required, Toast.LENGTH_LONG).show()
+            finish()
+        }
+    }
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            val binder = service as StreamService.StreamBinder
+            // The binder can be null or an unexpected type if the service died during bind;
+            // an unchecked cast here would crash on a path the user can't even see.
+            val binder = service as? StreamService.StreamBinder ?: run {
+                android.util.Log.e("StreamActivity", "Service bound without a usable binder")
+                return
+            }
+            if (!::streamManager.isInitialized) {
+                android.util.Log.w("StreamActivity", "Service connected before the camera was ready")
+                return
+            }
             streamService = binder.getService()
             streamService?.setStreamManager(streamManager)
             isServiceBound = true
-            
+
             // Observe service state
             observeServiceState()
         }
@@ -93,8 +119,8 @@ class StreamActivity : AppCompatActivity() {
     private val overlayPersistRunnable = Runnable {
         val toSave = pendingOverlayPersist ?: return@Runnable
         pendingOverlayPersist = null
-        lifecycleScope.launch {
-            try { overlayStore.updateOverlay(toSave) } catch (_: Exception) { }
+        safeLaunch(TAG, "persisting overlay position") {
+            overlayStore.updateOverlay(toSave)
         }
     }
 
@@ -120,33 +146,28 @@ class StreamActivity : AppCompatActivity() {
         streamPrefs = StreamPrefs(this)
         overlayStore = OverlayStore(this)
 
-        // Load stream configuration
-        lifecycleScope.launch {
+        // Load stream configuration. Guarded: a DataStore read can throw (corrupt file, disk
+        // pressure) and an unhandled throw inside launch{} takes the whole process down.
+        safeLaunch(TAG, "loading stream config") {
             streamConfig = streamPrefs.load()
             // Size overlays to the real output resolution so they aren't distorted.
             streamConfig?.let { overlayRenderer?.setStreamSize(it.width, it.height) }
         }
 
         // Check permissions
-        if (!PermissionHelper.hasCameraAndAudio(this)) {
-            PermissionHelper.requestCameraAndAudio(this) { granted ->
-                if (granted) {
-                    initializeCamera()
-                } else {
-                    Toast.makeText(
-                        this,
-                        R.string.permission_required,
-                        Toast.LENGTH_LONG
-                    ).show()
-                    finish()
-                }
-            }
-        } else {
+        if (PermissionHelper.hasCameraAndAudio(this)) {
             initializeCamera()
+        } else {
+            permissionLauncher.launch(PermissionHelper.REQUIRED_PERMISSIONS)
         }
     }
 
     private fun initializeCamera() {
+        // The permission callback can land on an activity that's already finishing, and
+        // nothing stops it firing twice — a second pass would leak a whole camera pipeline and
+        // stack duplicate surface callbacks.
+        if (isFinishing || isDestroyed || ::rtmpCamera.isInitialized) return
+
         // Initialize StreamManager first (will be set as ConnectChecker)
         streamManager = StreamManager(null)
 
@@ -210,17 +231,23 @@ class StreamActivity : AppCompatActivity() {
         // Set up surface callbacks
         binding.openGlView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
-                // Start preview when surface is ready
-                startPreviewAtConfiguredResolution(CameraHelper.Facing.BACK)
-                // Apply persisted overlays now that the GL pipeline is alive.
-                loadAndApplyOverlays()
-                // Start audio level monitoring
-                startAudioLevelMonitoring()
-                // If the surface was destroyed mid-stream (e.g. the media picker covered
-                // us), the encoder feed died with it — transparently restart the stream.
-                if (pendingStreamRecovery) {
-                    pendingStreamRecovery = false
-                    recoverStreamAfterSurfaceLoss()
+                try {
+                    // Start preview when surface is ready
+                    startPreviewAtConfiguredResolution(CameraHelper.Facing.BACK)
+                    // Apply persisted overlays now that the GL pipeline is alive.
+                    loadAndApplyOverlays()
+                    // Start audio level monitoring
+                    startAudioLevelMonitoring()
+                    // If the surface was destroyed mid-stream (e.g. the media picker covered
+                    // us), the encoder feed died with it — transparently restart the stream.
+                    if (pendingStreamRecovery) {
+                        pendingStreamRecovery = false
+                        recoverStreamAfterSurfaceLoss()
+                    }
+                } catch (e: Exception) {
+                    // Camera/GL bring-up is device-dependent and throws on some OEM builds.
+                    // A black preview the user can retry beats a dead process.
+                    android.util.Log.e("StreamActivity", "surfaceCreated setup failed", e)
                 }
             }
 
@@ -237,22 +264,36 @@ class StreamActivity : AppCompatActivity() {
                 // Losing the surface tears down the GL pipeline (OpenGlView.stop()), which
                 // kills the live encoder feed. If we were streaming, stop the now-dead
                 // stream cleanly and flag it to auto-restart when the surface returns.
-                val state = streamManager.state.value
-                if (state is StreamState.Live || state is StreamState.Connecting) {
-                    pendingStreamRecovery = true
-                    streamManager.stopStream()
-                }
-                if (rtmpCamera.isOnPreview) {
-                    rtmpCamera.stopPreview()
+                try {
+                    val state = streamManager.state.value
+                    if (state is StreamState.Live || state is StreamState.Connecting) {
+                        pendingStreamRecovery = true
+                        streamManager.stopStream()
+                    }
+                    if (rtmpCamera.isOnPreview) {
+                        rtmpCamera.stopPreview()
+                    }
+                } catch (e: Exception) {
+                    // surfaceDestroyed runs during teardown, when the encoder/GL objects are
+                    // already half-gone. Throwing here would crash us on the way out.
+                    android.util.Log.e("StreamActivity", "surfaceDestroyed cleanup failed", e)
                 }
                 // Stop audio level monitoring
                 stopAudioLevelMonitoring()
             }
         })
 
-        // Switch camera button
+        // Switch camera button. RootEncoder declares switchCamera() as throwing
+        // CameraOpenException — Kotlin doesn't force us to handle it, so this was an ordinary
+        // tap that could kill the app whenever the other camera was busy or unavailable
+        // (in use by another app, or a device with only one usable lens).
         binding.btnSwitchCamera.setOnClickListener {
-            rtmpCamera.switchCamera()
+            try {
+                rtmpCamera.switchCamera()
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "switchCamera failed", e)
+                Toast.makeText(this, R.string.switch_camera_failed, Toast.LENGTH_SHORT).show()
+            }
         }
 
         // Rotate screen button: cycle auto → landscape-left → landscape-right → auto.
@@ -348,25 +389,56 @@ class StreamActivity : AppCompatActivity() {
                 // Immediate visual feedback — flip to Connecting now rather than waiting for the
                 // service round-trip, so the button stops inviting another tap.
                 updateUIForState(StreamState.Connecting)
-                // Start streaming via service
-                val intent = Intent(this, StreamService::class.java).apply {
-                    action = StreamService.ACTION_START
-                    putExtra(StreamService.EXTRA_CONFIG, config)
+                if (!requestStreamStart(config)) {
+                    updateUIForState(StreamState.Idle)
                 }
-                ContextCompat.startForegroundService(this, intent)
             }
             is StreamState.Live, is StreamState.Connecting -> {
                 // Stop streaming via service
-                val intent = Intent(this, StreamService::class.java).apply {
-                    action = StreamService.ACTION_STOP
+                try {
+                    val intent = Intent(this, StreamService::class.java).apply {
+                        action = StreamService.ACTION_STOP
+                    }
+                    startService(intent)
+                } catch (e: Exception) {
+                    // Stopping must never be the thing that crashes us; fall back to stopping
+                    // the encoder directly so the user isn't stuck "live" with a dead button.
+                    android.util.Log.e("StreamActivity", "Couldn't deliver stop to the service", e)
+                    streamManager.stopStream()
                 }
-                startService(intent)
             }
         }
     }
 
+    /**
+     * Ask the service to go live. Returns false if the request couldn't be delivered.
+     *
+     * `startForegroundService` is not safe to call blind: from Android 12 it throws
+     * ForegroundServiceStartNotAllowedException whenever the app isn't in the foreground, and
+     * we call it from a delayed recovery path that can easily land while the user is elsewhere.
+     * Uncaught, that is a hard crash of a *streaming* app — the worst possible moment.
+     */
+    private fun requestStreamStart(config: StreamConfig): Boolean {
+        if (!isUiAlive()) {
+            android.util.Log.w("StreamActivity", "Skipping stream start: activity isn't in the foreground")
+            return false
+        }
+        return try {
+            val intent = Intent(this, StreamService::class.java).apply {
+                action = StreamService.ACTION_START
+                putExtra(StreamService.EXTRA_CONFIG, config)
+            }
+            ContextCompat.startForegroundService(this, intent)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("StreamActivity", "Foreground service start rejected", e)
+            Toast.makeText(this, R.string.stream_foreground_blocked, Toast.LENGTH_LONG).show()
+            false
+        }
+    }
+
     private fun observeStreamState() {
-        lifecycleScope.launch {
+        safeLaunch(TAG, "observing stream state") {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 streamManager.state.collect { state ->
                     updateUIForState(state)
@@ -376,7 +448,7 @@ class StreamActivity : AppCompatActivity() {
     }
 
     private fun observeServiceState() {
-        lifecycleScope.launch {
+        safeLaunch(TAG, "observing service state") {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 streamService?.serviceState?.collect { state ->
                     // Service state updates UI as well
@@ -386,7 +458,20 @@ class StreamActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Render a stream state. Wrapped because it runs from two flow collectors: a throw here —
+     * a missing string arg, a view already detached — would cancel the collector *and* crash,
+     * leaving the UI permanently out of sync with the stream.
+     */
     private fun updateUIForState(state: StreamState) {
+        try {
+            applyUIForState(state)
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Rendering state $state failed", e)
+        }
+    }
+
+    private fun applyUIForState(state: StreamState) {
         when (state) {
             is StreamState.Idle -> {
                 binding.tvStreamStatus.text = getString(R.string.status_idle)
@@ -428,15 +513,24 @@ class StreamActivity : AppCompatActivity() {
     }
 
     private fun toggleMute() {
-        isMuted = !isMuted
-        
+        if (!::rtmpCamera.isInitialized) return
+        val nextMuted = !isMuted
+        // enable/disableAudio reach into the running AudioRecord, which can object mid-
+        // teardown. Keep isMuted in sync with what actually happened rather than flipping it
+        // first and crashing on the call.
+        try {
+            if (nextMuted) rtmpCamera.disableAudio() else rtmpCamera.enableAudio()
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Toggling mute failed", e)
+            return
+        }
+        isMuted = nextMuted
+
         if (isMuted) {
-            rtmpCamera.disableAudio()
             binding.btnMuteToggle.setIconResource(R.drawable.ic_mic_off)
             binding.btnMuteToggle.contentDescription = getString(R.string.unmute)
             binding.audioLevelBar.progress = 0
         } else {
-            rtmpCamera.enableAudio()
             binding.btnMuteToggle.setIconResource(R.drawable.ic_mic)
             binding.btnMuteToggle.contentDescription = getString(R.string.mute)
         }
@@ -503,6 +597,13 @@ class StreamActivity : AppCompatActivity() {
     }
     
     private fun showOverlayManager() {
+        // Committing a fragment transaction after the activity has saved its state throws
+        // IllegalStateException ("Can not perform this action after onSaveInstanceState"), and
+        // a second sheet on top of the first is just as broken. Both are reachable by tapping
+        // the button as the activity is going away.
+        if (supportFragmentManager.isStateSaved || isFinishing) return
+        if (supportFragmentManager.findFragmentByTag(OverlayManagerBottomSheet.TAG) != null) return
+
         val bottomSheet = OverlayManagerBottomSheet.newInstance()
         bottomSheet.setOnOverlaysChangedListener { overlays ->
             // Persisted store changed (add / delete / visibility / text edit).
@@ -563,21 +664,21 @@ class StreamActivity : AppCompatActivity() {
             if (streamManager.state.value is StreamState.Live ||
                 streamManager.state.value is StreamState.Connecting) return@postDelayed
             if (!rtmpCamera.isOnPreview) return@postDelayed
-            val intent = Intent(this, StreamService::class.java).apply {
-                action = StreamService.ACTION_START
-                putExtra(StreamService.EXTRA_CONFIG, config)
-            }
-            ContextCompat.startForegroundService(this, intent)
+            // requestStreamStart refuses (rather than crashes) if we're no longer foreground —
+            // the delay means the user may well have navigated away by now.
+            requestStreamStart(config)
         }, 600)
     }
 
     private fun loadAndApplyOverlays() {
-        lifecycleScope.launch {
+        safeLaunch(TAG, "applying saved overlays") {
             val overlays = try {
                 overlayStore.loadOverlays()
             } catch (_: Exception) {
                 emptyList()
             }
+            // Inside the guard: pushing to the gesture surface and the GL pipeline can both
+            // throw, and previously did so outside any handler.
             binding.overlayEditor.setItems(overlays)
             overlayRenderer?.applyOverlays(overlays)
         }
@@ -585,26 +686,61 @@ class StreamActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (::rtmpCamera.isInitialized && rtmpCamera.isOnPreview) {
-            rtmpCamera.stopPreview()
+        // Do NOT stop the preview while we're broadcasting. The preview surface IS the
+        // encoder's video feed, so tearing it down for a transient pause (a dialog, the
+        // notification shade, the permission sheet) killed the live stream and kicked off the
+        // whole stop/recover/foreground-restart cycle — the most common way the app died
+        // mid-broadcast. When the activity really goes away the surface is destroyed, and
+        // surfaceDestroyed handles that case properly.
+        if (::rtmpCamera.isInitialized && rtmpCamera.isOnPreview && !isStreamingOrConnecting()) {
+            try {
+                rtmpCamera.stopPreview()
+            } catch (e: Exception) {
+                android.util.Log.e("StreamActivity", "stopPreview on pause failed", e)
+            }
         }
         stopAudioLevelMonitoring()
         flushPendingOverlayPersist()
+    }
+
+    private fun isStreamingOrConnecting(): Boolean {
+        if (!::streamManager.isInitialized) return false
+        val state = streamManager.state.value
+        return state is StreamState.Live || state is StreamState.Connecting
     }
 
     private fun flushPendingOverlayPersist() {
         overlayPersistHandler.removeCallbacks(overlayPersistRunnable)
         val toSave = pendingOverlayPersist ?: return
         pendingOverlayPersist = null
-        lifecycleScope.launch {
-            try { overlayStore.updateOverlay(toSave) } catch (_: Exception) { }
+        safeLaunch(TAG, "persisting overlay position") {
+            overlayStore.updateOverlay(toSave)
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // Don't start preview here - let surfaceCreated handle it
-        // The surface might not be ready yet
+        // Normally surfaceCreated restarts the preview. But a pause that did NOT destroy the
+        // surface (a dialog, the picker, the app switcher) leaves us with a valid surface and
+        // a stopped preview, and no callback will ever fire — that was the black-preview-after-
+        // coming-back report. Restart it here when that's the situation we're in.
+        if (!::rtmpCamera.isInitialized) return
+        try {
+            if (!rtmpCamera.isOnPreview && binding.openGlView.holder.surface?.isValid == true) {
+                startPreviewAtConfiguredResolution(currentFacing())
+                loadAndApplyOverlays()
+            }
+            startAudioLevelMonitoring()
+        } catch (e: Exception) {
+            android.util.Log.e("StreamActivity", "Resuming the preview failed", e)
+        }
+    }
+
+    private fun currentFacing(): CameraHelper.Facing = try {
+        if (rtmpCamera.cameraFacing == CameraHelper.Facing.FRONT) CameraHelper.Facing.FRONT
+        else CameraHelper.Facing.BACK
+    } catch (_: Exception) {
+        CameraHelper.Facing.BACK
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
@@ -637,12 +773,18 @@ class StreamActivity : AppCompatActivity() {
         stopStatsHud()
         flushPendingOverlayPersist()
 
-        overlayRenderer?.release()
+        // Teardown touches GL, MediaPlayers, WebViews and a bound service, any of which can
+        // object at this point. Crashing during onDestroy is both fatal and pointless.
+        try { overlayRenderer?.release() } catch (e: Exception) {
+            android.util.Log.e("StreamActivity", "Releasing overlays failed", e)
+        }
         overlayRenderer = null
 
         // Unbind from service
         if (isServiceBound) {
-            unbindService(serviceConnection)
+            try { unbindService(serviceConnection) } catch (e: Exception) {
+                android.util.Log.e("StreamActivity", "unbindService failed", e)
+            }
             isServiceBound = false
         }
 
@@ -651,6 +793,8 @@ class StreamActivity : AppCompatActivity() {
     }
 
     private companion object {
+        const val TAG = "StreamActivity"
+
         // Ignore Go Live / Stop taps that land within this window of the previous one.
         const val GO_LIVE_DEBOUNCE_MS = 1500L
     }

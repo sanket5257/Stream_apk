@@ -151,8 +151,18 @@ class StreamManager(
         val rtmpUrl = if (base.endsWith("/")) base + config.streamKey
                       else "$base/${config.streamKey}"
 
-        camera.startStream(rtmpUrl)
-        
+        // RootEncoder throws out of startStream when the RTMP client or the encoder is in a
+        // state it doesn't expect (a socket it can't open, a pipeline still tearing down).
+        // This runs on the main thread from the service, so letting it escape kills the app
+        // instead of showing "couldn't connect".
+        try {
+            camera.startStream(rtmpUrl)
+        } catch (t: Throwable) {
+            android.util.Log.e("StreamManager", "startStream threw", t)
+            _state.value = StreamState.Failed("Couldn't open the connection to the server")
+            return
+        }
+
         // Re-apply overlays AFTER stream starts, when GL context is fully ready.
         // prepareVideo() resets the GL pipeline, and glInterface needs the stream
         // running to accept new filters.
@@ -205,8 +215,15 @@ class StreamManager(
      */
     fun stopStream() {
         lastBitrateBps = 0L
-        bitrateAdapter.reset()
-        rtmpCamera?.stopStream()
+        try { bitrateAdapter.reset() } catch (_: Throwable) { }
+        // Stopping is a cleanup path — it runs from onDestroy, from the Stop button and from
+        // the reconnect loop. It must always leave us in Idle, even if the encoder objects to
+        // being torn down, or a failed stop would strand the UI on "Live" forever.
+        try {
+            rtmpCamera?.stopStream()
+        } catch (t: Throwable) {
+            android.util.Log.e("StreamManager", "stopStream threw", t)
+        }
         _state.value = StreamState.Idle
     }
 

@@ -13,12 +13,12 @@ import com.pedro.encoder.input.gl.render.filters.`object`.BaseObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.GifObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.ImageObjectFilterRender
 import com.pedro.library.rtmp.RtmpCamera2
+import com.streamforge.app.util.safeLaunch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import kotlin.math.ceil
@@ -100,7 +100,13 @@ class OverlayRenderer(
 
     private val verifyRunnable = object : Runnable {
         override fun run() {
-            reconcile(lastItems, forceTextureReload = true)
+            // Own guard: this runs on the main looper, outside any caller's try/catch, so an
+            // escaping throw here is a process kill during an ordinary self-heal sweep.
+            try {
+                reconcile(lastItems, forceTextureReload = true)
+            } catch (t: Throwable) {
+                android.util.Log.e("OverlayRenderer", "Verify sweep failed", t)
+            }
             verifyAttempts++
             if (verifyAttempts < MAX_VERIFY_ATTEMPTS) {
                 mainHandler.postDelayed(this, VERIFY_INTERVAL_MS)
@@ -115,7 +121,13 @@ class OverlayRenderer(
 
     private val attachWatchdog = object : Runnable {
         override fun run() {
-            checkStillAttached()
+            // As with verifyRunnable: main-looper work needs its own guard, and this one must
+            // keep re-arming even after a failure or overlays stop self-healing entirely.
+            try {
+                checkStillAttached()
+            } catch (t: Throwable) {
+                android.util.Log.e("OverlayRenderer", "Attach watchdog failed", t)
+            }
             // A rebuild inside checkStillAttached() re-arms this runnable via applyOverlays,
             // so clear any pending tick first — otherwise each rebuild doubles the watchdog.
             mainHandler.removeCallbacks(this)
@@ -227,9 +239,12 @@ class OverlayRenderer(
                     android.util.Log.d("OverlayRenderer", "Adding new overlay ${item.id} (type: ${item::class.simpleName})")
                     addOverlay(item)
                 }
-            } catch (e: Exception) {
+            } catch (t: Throwable) {
                 // Isolate per-overlay failures so one bad item can't crash the whole apply.
-                android.util.Log.e("OverlayRenderer", "Failed to reconcile overlay ${item.id}", e)
+                // Throwable, not Exception: attaching an overlay uploads a texture, so an
+                // OutOfMemoryError here is entirely possible and must not be fatal — it should
+                // cost that one overlay, not the broadcast.
+                android.util.Log.e("OverlayRenderer", "Failed to reconcile overlay ${item.id}", t)
             }
         }
         android.util.Log.d("OverlayRenderer", "applyOverlays complete. Filters: ${filters.size}, Bitmaps cached: ${bitmaps.size}, GIFs cached: ${gifBytes.size}")
@@ -276,12 +291,12 @@ class OverlayRenderer(
             // Home" symptom, since a restart re-routes through Login → Home). Isolate it.
             try {
                 advanceTicker(item, filter)
-            } catch (e: Exception) {
-                android.util.Log.e("OverlayRenderer", "tickScroll failed for ${item.id}", e)
             } catch (e: OutOfMemoryError) {
                 // Strip allocation under memory pressure: drop it and coast on the last frame.
                 android.util.Log.e("OverlayRenderer", "ticker strip OOM for ${item.id}", e)
                 tickerStrips.remove(item.id)
+            } catch (t: Throwable) {
+                android.util.Log.e("OverlayRenderer", "tickScroll failed for ${item.id}", t)
             }
         }
     }
@@ -419,10 +434,11 @@ class OverlayRenderer(
                 applyText(filter, item)
             }
             applyTransform(filter, item)
-        } catch (e: Exception) {
-            // A GL/encoder call can throw if the pipeline is mid-teardown. Never let it
-            // crash the caller (overlay toggle, gesture, or reconcile).
-            android.util.Log.e("OverlayRenderer", "updateOverlay failed for ${item.id}", e)
+        } catch (t: Throwable) {
+            // A GL/encoder call can throw if the pipeline is mid-teardown, and re-rasterizing
+            // text allocates a bitmap (so: OutOfMemoryError). Never let either crash the caller
+            // — this runs on every drag frame and every overlay toggle.
+            android.util.Log.e("OverlayRenderer", "updateOverlay failed for ${item.id}", t)
         }
     }
 
@@ -453,22 +469,22 @@ class OverlayRenderer(
         }
         
         android.util.Log.d("OverlayRenderer", "Loading image ${item.id} from ${item.uri}")
-        pendingLoads[item.id] = scope.launch {
+        pendingLoads[item.id] = scope.safeLaunch(TAG, "loading overlay ${item.id}") {
             val bitmap = withContext(Dispatchers.IO) { decodeBitmap(item.uri) }
             pendingLoads.remove(item.id)
             if (bitmap == null) {
                 android.util.Log.e("OverlayRenderer", "Failed to decode bitmap for ${item.id}")
-                return@launch
+                return@safeLaunch
             }
             if (!item.visible) {
                 android.util.Log.d("OverlayRenderer", "Item ${item.id} no longer visible, recycling bitmap")
                 bitmap.recycle()
-                return@launch
+                return@safeLaunch
             }
             if (filters.containsKey(item.id)) {
                 android.util.Log.d("OverlayRenderer", "Filter already exists for ${item.id}, recycling new bitmap")
                 bitmap.recycle()
-                return@launch
+                return@safeLaunch
             }
             bitmaps[item.id] = bitmap
             if (bitmap.height > 0) contentAspect[item.id] = bitmap.width.toFloat() / bitmap.height
@@ -496,7 +512,7 @@ class OverlayRenderer(
             return
         }
         
-        pendingLoads[item.id] = scope.launch {
+        pendingLoads[item.id] = scope.safeLaunch(TAG, "loading overlay ${item.id}") {
             val bytes = withContext(Dispatchers.IO) {
                 try {
                     context.contentResolver.openInputStream(Uri.parse(item.uri))?.use { it.readBytes() }
@@ -505,13 +521,13 @@ class OverlayRenderer(
                 }
             }
             pendingLoads.remove(item.id)
-            if (bytes == null || !item.visible || filters.containsKey(item.id)) return@launch
+            if (bytes == null || !item.visible || filters.containsKey(item.id)) return@safeLaunch
             gifBytes[item.id] = bytes
             recordGifAspect(item.id, bytes)
             val filter = try {
                 GifObjectFilterRender().apply { setGif(ByteArrayInputStream(bytes)) }
             } catch (_: Exception) {
-                return@launch
+                return@safeLaunch
             }
             attachFilter(item, filter)
         }
@@ -528,12 +544,20 @@ class OverlayRenderer(
             // attach lands, in case the first GL upload raced the render thread and came
             // out blank. Deduped via texturesHealed so it fires at most once per attach.
             if (item is OverlayItem.Image || item is OverlayItem.Gif || item is OverlayItem.Text) {
-                mainHandler.postDelayed({ healTextureOnce(item) }, VERIFY_INTERVAL_MS)
+                mainHandler.postDelayed({
+                    // Posted work runs outside every caller's guard, so it needs its own:
+                    // healing re-rasterizes/re-uploads a texture and can throw or OOM.
+                    try {
+                        healTextureOnce(item)
+                    } catch (t: Throwable) {
+                        android.util.Log.e("OverlayRenderer", "Texture heal failed for ${item.id}", t)
+                    }
+                }, VERIFY_INTERVAL_MS)
             }
             android.util.Log.d("OverlayRenderer", "Successfully attached filter for ${item.id}")
-        } catch (e: Exception) {
+        } catch (t: Throwable) {
             // glInterface may not be ready yet — caller will retry via applyOverlays.
-            android.util.Log.e("OverlayRenderer", "Failed to attach filter for ${item.id}", e)
+            android.util.Log.e("OverlayRenderer", "Failed to attach filter for ${item.id}", t)
             bitmaps.remove(item.id)?.recycle()
             videoPlayers.remove(item.id)?.release()
         }
@@ -861,18 +885,24 @@ class OverlayRenderer(
         context.contentResolver.openInputStream(uri).use { stream ->
             BitmapFactory.decodeStream(stream, null, opts)
         }
-    } catch (_: Exception) {
+    } catch (t: Throwable) {
+        // Throwable: decoding is exactly where OutOfMemoryError shows up, and it is an Error.
+        // A missing overlay is recoverable; a dead process during a broadcast is not.
+        android.util.Log.e("OverlayRenderer", "Failed to decode overlay image $uriString", t)
         null
     }
 
     /**
-     * Largest texture edge we keep for image overlays. Sized to ~2× the output's long edge so
-     * an overlay stays pixel-sharp even scaled to full width (a texture bigger than the on-
-     * screen box only ever downscales — never blurs). Capped at 4096 to stay within typical GL
-     * texture limits / memory.
+     * Largest texture edge we keep for image overlays.
+     *
+     * An overlay's box maxes out at the full frame width, so a texture at the output's long
+     * edge already only ever downscales — it can't look soft. The previous 2× (up to 4096)
+     * meant a single image overlay could be a 4096×4096 ARGB_8888 allocation: ~67 MB, claimed
+     * at the same moment the encoder, camera and GL pipeline want memory, for no visible gain.
+     * That was a straightforward OutOfMemoryError on any mid-range device.
      */
     private fun maxOverlayEdgePx(): Int =
-        (maxOf(streamWidth, streamHeight) * 2).coerceIn(2048, 4096)
+        maxOf(streamWidth, streamHeight).coerceIn(1280, 2048)
 
     private fun calcSampleSize(srcW: Int, srcH: Int, maxEdge: Int): Int {
         if (srcW <= 0 || srcH <= 0) return 1
@@ -883,9 +913,21 @@ class OverlayRenderer(
     }
 
     private companion object {
-        // Web/URL overlay supersample resolution (downscaled to the stream by the GPU).
-        const val BROWSER_RENDER_W = 2560
-        const val BROWSER_RENDER_H = 1440
+        const val TAG = "OverlayRenderer"
+
+        /**
+         * Web/URL overlay render resolution.
+         *
+         * This is 1080p, not the 1440p it used to be, because the WebView is in SOFTWARE layer
+         * mode (required for transparency) and is redrawn ~30×/second on the main thread. At
+         * 2560×1440 each backing bitmap is ~14 MB and every frame is a 3.7-megapixel CPU
+         * rasterization — enough to OOM a mid-range phone and enough main-thread work to jank
+         * or ANR the app, while the encoder and camera are competing for the same memory.
+         * 1080p matches the app's own max output resolution, so nothing is actually lost: any
+         * supersample above the stream size is discarded by the GPU downscale anyway.
+         */
+        const val BROWSER_RENDER_W = 1920
+        const val BROWSER_RENDER_H = 1080
 
         // Ticker (scrolling text) height at scale 1.0, as a percent of the stream height —
         // ~8% is a broadcast-style lower third on a 1080p frame. The size slider multiplies it.

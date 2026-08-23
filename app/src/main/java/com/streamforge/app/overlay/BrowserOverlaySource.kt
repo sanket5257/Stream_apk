@@ -147,6 +147,11 @@ class BrowserOverlaySource(
             return
         }
         try {
+            // NOTE the Throwable catch below, not Exception. A software-layer WebView draw
+            // allocates a full-size backing bitmap, so under memory pressure this throws
+            // OutOfMemoryError — an Error, which an `Exception` catch lets straight through to
+            // kill the process, 30 times a second, while the user is live.
+            //
             // Keep the WebView laid out at its authored render size so the page renders
             // correctly, then STRETCH its actual content to fill the whole capture buffer.
             // The page often paints shorter than the canvas (its content box is < the full
@@ -170,10 +175,10 @@ class BrowserOverlaySource(
                 canvas.scale(cw.toFloat() / renderWidth, ch.toFloat() / renderHeight)
             }
             wv.draw(canvas)
-        } catch (e: Exception) {
-            Log.e(TAG, "draw failed for $url", e)
+        } catch (t: Throwable) {
+            Log.e(TAG, "draw failed for $url", t)
         } finally {
-            try { surface.unlockCanvasAndPost(canvas) } catch (_: Exception) { }
+            try { surface.unlockCanvasAndPost(canvas) } catch (_: Throwable) { }
         }
     }
 

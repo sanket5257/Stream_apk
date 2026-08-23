@@ -26,7 +26,10 @@ import kotlinx.serialization.Serializable
 class AuthManager(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
-    private val supabase = SupabaseClient.client
+    // Lazy: building the Supabase/ktor client is heavy and can throw. AuthManager is
+    // constructed on the main thread from several activities, so resolving it eagerly here
+    // both stalled startup and turned a backend misconfiguration into a launch-time crash.
+    private val supabase by lazy { SupabaseClient.client }
 
     companion object {
         private const val TAG = "AuthManager"

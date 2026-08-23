@@ -61,8 +61,19 @@ class TextOverlayDialog : DialogFragment() {
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val binding = DialogTextOverlayBinding.inflate(LayoutInflater.from(requireContext()))
         val ctx = requireContext()
+
+        // Restored by the FragmentManager after process death: `existing` and `onResult` are
+        // plain fields and are gone, so this dialog can neither pre-fill the overlay being
+        // edited nor deliver a result. Showing it would silently discard whatever the user
+        // types — close it instead of pretending to work.
+        if (savedInstanceState != null && onResult == null) {
+            return AlertDialog.Builder(ctx).create().also {
+                it.setOnShowListener { _ -> dismissAllowingStateLoss() }
+            }
+        }
+
+        val binding = DialogTextOverlayBinding.inflate(LayoutInflater.from(ctx))
         val density = resources.displayMetrics.density
 
         selectedColor = existing?.colorArgb ?: Color.WHITE

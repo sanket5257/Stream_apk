@@ -5,14 +5,13 @@ import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.lifecycle.lifecycleScope
 import com.streamforge.app.auth.AuthManager
 import com.streamforge.app.auth.DeviceHelper
 import com.streamforge.app.auth.LoginActivity
 import com.streamforge.app.databinding.ActivityProfileBinding
 import com.streamforge.app.storage.StreamPrefs
 import com.streamforge.app.update.UpdateFlow
-import kotlinx.coroutines.launch
+import com.streamforge.app.util.safeLaunch
 
 /**
  * Profile / account screen. Surfaces account info and the operations a user
@@ -59,7 +58,7 @@ class ProfileActivity : AppCompatActivity() {
     }
 
     private fun refreshYoutubeState() {
-        lifecycleScope.launch {
+        safeLaunch(TAG, "reading YouTube connection state") {
             val key = streamPrefs.load().streamKey
             binding.tvYoutubeState.text =
                 if (key.isNotBlank()) "Stream key saved · ••••${key.takeLast(4)}"
@@ -101,7 +100,7 @@ class ProfileActivity : AppCompatActivity() {
             .setTitle("Log out")
             .setMessage("You'll need to log in again to stream from this device.")
             .setPositiveButton("Log out") { _, _ ->
-                lifecycleScope.launch {
+                safeLaunch(TAG, "logging out") {
                     authManager.logout()
                     val intent = Intent(this@ProfileActivity, LoginActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -114,6 +113,7 @@ class ProfileActivity : AppCompatActivity() {
     }
 
     companion object {
+        const val TAG = "ProfileActivity"
         const val KEY_NIGHT_MODE = "night_mode"
     }
 }

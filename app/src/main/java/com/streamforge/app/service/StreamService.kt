@@ -3,16 +3,18 @@ package com.streamforge.app.service
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
-import com.pedro.library.rtmp.RtmpCamera2
-import com.streamforge.app.MainActivity
+import androidx.core.app.ServiceCompat
+import com.streamforge.app.R
 import com.streamforge.app.StreamActivity
 import com.streamforge.app.storage.StreamConfig
 import com.streamforge.app.stream.StreamManager
 import com.streamforge.app.stream.StreamState
+import com.streamforge.app.util.safeLaunch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,7 +24,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 
 /**
  * Phase 4A: Foreground service for background streaming.
@@ -52,6 +53,10 @@ class StreamService : Service() {
         private const val RECONNECT_COOLDOWN_MS = 4000L // let YouTube release the key
         private const val MIN_RECONNECT_MS = 3000L      // floor for backoff reconnects
         private const val MAX_FORCED_RECONNECTS = 5     // give up only after real persistence
+
+        // Held for the length of a broadcast. The old 10-minute cap silently expired mid-stream,
+        // and releasing an already-expired lock is one of the ways release() throws.
+        private const val WAKE_LOCK_TIMEOUT_MS = 4 * 60 * 60 * 1000L
     }
 
     private val binder = StreamBinder()
@@ -95,29 +100,60 @@ class StreamService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_START -> {
-                val config = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(EXTRA_CONFIG, StreamConfig::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra(EXTRA_CONFIG)
+        // Every path out of here is guarded. onStartCommand runs on the main thread, so an
+        // escaping exception — a rejected foreground start, a bad parcel, an encoder that
+        // throws on configure — kills the process, and the relaunch drops the user back at the
+        // login screen mid-stream.
+        try {
+            when (intent?.action) {
+                ACTION_START -> {
+                    val config = readConfig(intent)
+                    if (config != null) {
+                        startStreaming(config)
+                    } else {
+                        Log.e(TAG, "No config provided")
+                        stopSelf()
+                    }
                 }
-                
-                if (config != null) {
-                    startStreaming(config)
-                } else {
-                    Log.e(TAG, "No config provided")
+                ACTION_STOP -> {
+                    stopStreaming()
+                    stopSelf()
+                }
+                else -> {
+                    // Nothing to do, but the system may have delivered this via
+                    // startForegroundService and be waiting for a startForeground() that is
+                    // never coming. Stop immediately so it doesn't time us out instead.
+                    Log.w(TAG, "Ignoring start command with action=${intent?.action}")
                     stopSelf()
                 }
             }
-            ACTION_STOP -> {
-                stopStreaming()
-                stopSelf()
-            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "onStartCommand failed", t)
+            failStream("Couldn't start the streaming service")
+            stopStreaming()
+            stopSelf()
         }
-        
+
         return START_NOT_STICKY
+    }
+
+    private fun readConfig(intent: Intent): StreamConfig? = try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(EXTRA_CONFIG, StreamConfig::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(EXTRA_CONFIG)
+        }
+    } catch (t: Throwable) {
+        Log.e(TAG, "Couldn't read stream config from intent", t)
+        null
+    }
+
+    /** Report a terminal problem through the same state channel the UI already observes. */
+    private fun failStream(reason: String) {
+        terminating = true
+        _serviceState.value = StreamState.Failed(reason)
+        streamManager?.markFailed(reason)
     }
 
     private fun startStreaming(config: StreamConfig) {
@@ -161,8 +197,15 @@ class StreamService : Service() {
             stopPendingIntent,
             returnPendingIntent
         )
-        
-        startForeground(NotificationHelper.NOTIFICATION_ID, notification)
+
+        if (!enterForeground(notification)) {
+            // Android refused the foreground promotion — see enterForeground. Don't start the
+            // encoder for a session the system is about to kill.
+            releaseWakeLock()
+            failStream(getString(R.string.stream_foreground_blocked))
+            stopSelf()
+            return
+        }
 
         // Start the actual stream. If the activity hasn't bound its StreamManager yet (cold
         // start race), queue the request instead of silently dropping it — setStreamManager()
@@ -176,6 +219,36 @@ class StreamService : Service() {
         }
     }
 
+    /**
+     * Promote to a foreground service, declaring the camera + microphone types explicitly.
+     *
+     * This is one of the app's real crash sources. On Android 12+ a foreground service started
+     * while the app is in the background throws ForegroundServiceStartNotAllowedException, and
+     * on Android 14+ a camera/microphone service whose permission was revoked throws
+     * SecurityException — both from inside startForeground(), on the main thread, uncaught.
+     * That is exactly the "opened the gallery picker, came back, app was gone" report: the
+     * surface-loss auto-recovery re-issued a foreground start while we were still backgrounded.
+     *
+     * Returning false lets the caller report a real message instead of dying.
+     */
+    private fun enterForeground(notification: android.app.Notification): Boolean = try {
+        ServiceCompat.startForeground(
+            this,
+            NotificationHelper.NOTIFICATION_ID,
+            notification,
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            } else {
+                0
+            }
+        )
+        true
+    } catch (t: Throwable) {
+        Log.e(TAG, "startForeground rejected by the system", t)
+        false
+    }
+
     private fun stopStreaming() {
         Log.d(TAG, "Stopping streaming service")
         // Cancel pending reconnect/watchdog FIRST so they can't re-publish after the user stops.
@@ -186,29 +259,48 @@ class StreamService : Service() {
         backupExhausted = false
         forcedReconnects = 0
         pendingStartConfig = null
-        streamManager?.stopStream()
+        try { streamManager?.stopStream() } catch (t: Throwable) { Log.e(TAG, "stopStream failed", t) }
         releaseWakeLock()
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        leaveForeground()
+    }
+
+    /** stopForeground can throw if we were never promoted; stopping must never crash. */
+    private fun leaveForeground() {
+        try {
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        } catch (t: Throwable) {
+            Log.w(TAG, "stopForeground failed", t)
+        }
     }
 
     private fun acquireWakeLock() {
-        if (wakeLock == null) {
-            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "StreamForge::StreamingWakeLock"
-            )
+        try {
+            if (wakeLock == null) {
+                val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "StreamForge::StreamingWakeLock"
+                )
+            }
+            wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
+            Log.d(TAG, "Wake lock acquired")
+        } catch (t: Throwable) {
+            // A missing wake lock costs battery-saver resilience, not correctness.
+            Log.w(TAG, "Could not acquire wake lock", t)
         }
-        wakeLock?.acquire(10 * 60 * 1000L) // 10 minutes max
-        Log.d(TAG, "Wake lock acquired")
     }
 
     private fun releaseWakeLock() {
-        wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
-                Log.d(TAG, "Wake lock released")
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "Wake lock released")
+                }
             }
+        } catch (t: Throwable) {
+            // release() throws if the timeout already expired and dropped the last reference.
+            Log.w(TAG, "Wake lock release failed", t)
         }
         wakeLock = null
     }
@@ -231,10 +323,17 @@ class StreamService : Service() {
         // another collector, multiplying the retry/reconnect logic.
         if (stateCollectorStarted) return
         stateCollectorStarted = true
-        serviceScope.launch {
+        serviceScope.safeLaunch(TAG, "stream state collector") {
             manager.state.collect { state ->
                 _serviceState.value = state
-                handleStreamState(state)
+                try {
+                    handleStreamState(state)
+                } catch (t: Throwable) {
+                    // Keep the collector alive: if retry/reconnect bookkeeping throws once, the
+                    // stream should degrade, not take the process with it — and losing the
+                    // collector would leave the notification stuck on a dead session.
+                    Log.e(TAG, "Handling state $state failed", t)
+                }
             }
         }
     }
@@ -287,11 +386,11 @@ class StreamService : Service() {
     private fun startNoDataWatchdog() {
         watchdogJob?.cancel()
         val mgr = streamManager ?: return
-        watchdogJob = serviceScope.launch {
+        watchdogJob = serviceScope.safeLaunch(TAG, "no-data watchdog") {
             delay(NO_DATA_GRACE_MS)
             var starvedMs = 0L
             while (isActive) {
-                if (_serviceState.value !is StreamState.Live) return@launch
+                if (_serviceState.value !is StreamState.Live) return@safeLaunch
                 if (mgr.lastBitrateBps > 0) {
                     starvedMs = 0L
                     forcedReconnects = 0 // a healthy, media-carrying session — clear the counter
@@ -299,7 +398,7 @@ class StreamService : Service() {
                     starvedMs += WATCHDOG_TICK_MS
                     if (starvedMs >= NO_DATA_TIMEOUT_MS) {
                         handleNoMedia()
-                        return@launch
+                        return@safeLaunch
                     }
                 }
                 delay(WATCHDOG_TICK_MS)
@@ -324,17 +423,17 @@ class StreamService : Service() {
                 "then Go Live again."
             )
             releaseWakeLock()
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            leaveForeground()
             stopSelf()
             return
         }
 
         Log.w(TAG, "No outbound media — clean reconnect $forcedReconnects/$MAX_FORCED_RECONNECTS")
         reconnectJob?.cancel()
-        reconnectJob = serviceScope.launch {
+        reconnectJob = serviceScope.safeLaunch(TAG, "reconnect") {
             streamManager?.stopStream()             // tear the dead session down fully
             delay(RECONNECT_COOLDOWN_MS)            // let YouTube release the key
-            if (!isActive) return@launch
+            if (!isActive) return@safeLaunch
             streamManager?.startStream(config, useBackup = usingBackup)
         }
     }
@@ -370,17 +469,24 @@ class StreamService : Service() {
             retryCount
         )
         
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-        notificationManager.notify(NotificationHelper.NOTIFICATION_ID, notification)
-        
+        try {
+            val notificationManager =
+                getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.notify(NotificationHelper.NOTIFICATION_ID, notification)
+        } catch (t: Throwable) {
+            // A notification we can't post is cosmetic; the reconnect below still runs.
+            Log.w(TAG, "Couldn't update the reconnect notification", t)
+        }
+
+
         // Exponential backoff (1s, 4s, 9s), floored so we always give YouTube enough time to
         // release the previous ingest session on this key before re-publishing.
         val delayMs = (retryCount * retryCount * 1000L).coerceAtLeast(MIN_RECONNECT_MS)
 
         reconnectJob?.cancel()
-        reconnectJob = serviceScope.launch {
+        reconnectJob = serviceScope.safeLaunch(TAG, "reconnect") {
             delay(delayMs)
-            if (!isActive) return@launch
+            if (!isActive) return@safeLaunch
             Log.d(TAG, "Attempting reconnect after ${delayMs}ms delay (backup=$usingBackup)")
             // stopStream() first so the client is clean — the start guard would otherwise
             // skip the reconnect if RootEncoder still thinks it's streaming.

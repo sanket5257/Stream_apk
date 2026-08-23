@@ -5,10 +5,9 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.streamforge.app.HomeActivity
 import com.streamforge.app.databinding.ActivityLoginBinding
-import kotlinx.coroutines.launch
+import com.streamforge.app.util.safeLaunch
 
 /**
  * Login/Signup screen for username/password authentication with device binding.
@@ -132,7 +131,7 @@ class LoginActivity : AppCompatActivity() {
         
         setLoading(true)
         
-        lifecycleScope.launch {
+        safeLaunch(TAG) {
             when (val result = authManager.signUp(email, username, password, inviteCode)) {
                 is AuthResult.Success -> {
                     Toast.makeText(
@@ -173,7 +172,7 @@ class LoginActivity : AppCompatActivity() {
         
         setLoading(true)
         
-        lifecycleScope.launch {
+        safeLaunch(TAG) {
             when (val result = authManager.authenticate(username, password)) {
                 is AuthResult.Success -> {
                     Toast.makeText(
@@ -198,7 +197,7 @@ class LoginActivity : AppCompatActivity() {
     private fun validateAndProceed() {
         setLoading(true)
         
-        lifecycleScope.launch {
+        safeLaunch(TAG) {
             when (val result = authManager.validateAuth()) {
                 is AuthResult.Success -> {
                     navigateToMain()
@@ -216,6 +215,10 @@ class LoginActivity : AppCompatActivity() {
         }
     }
     
+    private companion object {
+        const val TAG = "LoginActivity"
+    }
+
     private fun navigateToMain() {
         startActivity(Intent(this, HomeActivity::class.java))
         finish()

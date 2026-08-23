@@ -64,8 +64,12 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     ) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
         val uri = result.data?.data ?: return@registerForActivityResult
+        // The picker result can arrive at a sheet that's no longer attached (the host activity
+        // was recreated while the picker was up). requireContext() throws IllegalStateException
+        // there, uncaught, straight from the result callback.
+        val ctx = context ?: return@registerForActivityResult
         try {
-            requireContext().contentResolver.takePersistableUriPermission(
+            ctx.contentResolver.takePersistableUriPermission(
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         } catch (_: SecurityException) { }
@@ -83,7 +87,18 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        
+
+        // The host wires up onOverlaysChanged / onOverlayLiveUpdate on the instance it creates.
+        // A sheet the FragmentManager restored after process death has neither, so every edit
+        // would save to disk but never reach the live preview or the stream — the sheet looks
+        // functional and silently isn't. Close it instead; the user reopens it from a host that
+        // can actually listen.
+        if (savedInstanceState != null && onOverlaysChanged == null) {
+            dismissAllowingStateLoss()
+            return
+        }
+
+
         // Configure bottom sheet behavior. Give the sheet ~92% of the screen height so the
         // overlay list has real room to breathe — the default wrap/peek behaviour left it
         // cramped, with only a couple of tall size-control rows visible at once.
@@ -311,6 +326,10 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun showTextDialog(existing: OverlayItem.Text?) {
+        // Same state-saved rule as any fragment transaction — see StreamActivity.showOverlayManager.
+        val fm = parentFragmentManager
+        if (fm.isStateSaved || fm.findFragmentByTag(TextOverlayDialog.TAG) != null) return
+
         val dialog = TextOverlayDialog()
         existing?.let { dialog.setExisting(it) }
         dialog.setOnResult { result ->
@@ -319,7 +338,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                 else overlayStore.addOverlay(result)
             }
         }
-        dialog.show(parentFragmentManager, TextOverlayDialog.TAG)
+        dialog.show(fm, TextOverlayDialog.TAG)
     }
 
     private fun openPicker(
@@ -342,8 +361,10 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
     ) {
         if (resultCode != Activity.RESULT_OK) return
         val uri = data?.data ?: return
+        // See videoPickerLauncher: the sheet may already be detached when the result lands.
+        val ctx = context ?: return
         try {
-            requireContext().contentResolver.takePersistableUriPermission(
+            ctx.contentResolver.takePersistableUriPermission(
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         } catch (_: SecurityException) {
@@ -365,10 +386,13 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
             try {
                 block()
                 loadOverlays()
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "Overlay update failed", e)
-                if (isAdded) android.widget.Toast.makeText(
-                    requireContext(), R.string.overlay_update_failed, android.widget.Toast.LENGTH_SHORT
+            } catch (t: Throwable) {
+                // Throwable, not Exception: re-applying the list rasterizes text and uploads
+                // textures, so OutOfMemoryError is on the table here too.
+                android.util.Log.e(TAG, "Overlay update failed", t)
+                val ctx = context
+                if (isAdded && ctx != null) android.widget.Toast.makeText(
+                    ctx, R.string.overlay_update_failed, android.widget.Toast.LENGTH_SHORT
                 ).show()
             }
         }
@@ -378,6 +402,10 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         lifecycleScope.launch {
             try {
                 val overlays = overlayStore.loadOverlays()
+                // lifecycleScope outlives the VIEW, so the binding can already be gone by the
+                // time a store read completes (sheet dismissed mid-write). Bail before touching
+                // any view rather than relying on the catch to absorb the NPE.
+                val binding = _binding ?: return@launch
                 // Show front-most (highest zIndex) first so the list reads top-to-bottom like
                 // the visible stack. The renderer/editor re-sort by zIndex themselves, so the
                 // order we hand them doesn't matter — only the list display order does.
@@ -392,8 +420,8 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                 // Re-applying to the live GL pipeline (onOverlaysChanged) can throw from the
                 // encoder; keep it inside the guard so it never crashes the sheet.
                 onOverlaysChanged?.invoke(overlays)
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "Loading overlays failed", e)
+            } catch (t: Throwable) {
+                android.util.Log.e(TAG, "Loading overlays failed", t)
             }
         }
     }

@@ -3,12 +3,12 @@ package com.streamforge.app
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.streamforge.app.databinding.ActivityHomeBinding
 import com.streamforge.app.storage.StreamPrefs
 import com.streamforge.app.update.UpdateFlow
-import kotlinx.coroutines.launch
+import com.streamforge.app.util.CrashDialog
+import com.streamforge.app.util.safeLaunch
 
 /**
  * Home / landing screen (post-login). A focused streaming launchpad:
@@ -35,6 +35,10 @@ class HomeActivity : AppCompatActivity() {
             startActivity(Intent(this, MainActivity::class.java))
         }
 
+        // If the last session ended in a crash, say so here rather than letting the user
+        // guess why they were suddenly back at the login screen.
+        CrashDialog.showIfCrashed(this)
+
         // Sideloaded builds have nobody to tell them an update exists, so check here — quietly,
         // at most twice a day, and never while the user is mid-stream (this screen isn't).
         UpdateFlow.checkSilently(this)
@@ -46,7 +50,10 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun refreshKeyStatus() {
-        lifecycleScope.launch {
+        // Guarded: reading the key goes through DataStore + the Android keystore, both of
+        // which can throw on a device whose encrypted prefs got out of sync. A failed status
+        // label must not be fatal.
+        safeLaunch(TAG, "reading stream key status") {
             val key = streamPrefs.load().streamKey
             binding.tvKeyStatus.text =
                 if (key.isNotBlank()) "Saved · ••••${key.takeLast(4)}"
@@ -56,7 +63,7 @@ class HomeActivity : AppCompatActivity() {
 
     /** Go live: requires a stream key; otherwise prompt to add one first. */
     private fun goLive() {
-        lifecycleScope.launch {
+        safeLaunch(TAG, "starting the live flow") {
             val key = streamPrefs.load().streamKey
             if (key.isBlank()) {
                 Snackbar.make(binding.root, "Add your YouTube stream key first", Snackbar.LENGTH_SHORT).show()
@@ -65,5 +72,9 @@ class HomeActivity : AppCompatActivity() {
                 startActivity(Intent(this@HomeActivity, StreamActivity::class.java))
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "HomeActivity"
     }
 }

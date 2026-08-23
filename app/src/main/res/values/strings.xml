@@ -115,4 +115,16 @@
     <string name="active_overlays">Active Overlays</string>
     <string name="add_new_overlay">Add New Overlay</string>
     <string name="overlay_scale_label">Scale</string>
+
+    <string name="switch_camera_failed">Couldn\'t switch camera — it may be in use by another app</string>
+
+    <!-- Foreground-service start refused by Android (app was in the background). -->
+    <string name="stream_foreground_blocked">Android blocked the stream from starting in the background. Open StreamForge and tap Go Live again.</string>
+
+    <!-- Previous-session crash report, shown once on the next launch. -->
+    <string name="crash_dialog_title">StreamForge closed unexpectedly</string>
+    <string name="crash_dialog_message">The app hit an error last time and had to restart. Details:\n\n%1$s</string>
+    <string name="crash_dialog_copy">Copy details</string>
+    <string name="crash_dialog_dismiss">Dismiss</string>
+    <string name="crash_dialog_copied">Crash details copied</string>
 </resources>

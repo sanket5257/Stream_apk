@@ -39,7 +39,9 @@
         <item name="android:statusBarColor">@color/surface_dark</item>
         <item name="android:navigationBarColor">@color/surface_dark</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">@bool/light_system_bars</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="o">@bool/light_system_bars</item>
+        <!-- windowLightNavigationBar landed in API 27 (o_mr1), not 26 — the old "o" claim was
+             the one lint error in the project. -->
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">@bool/light_system_bars</item>
         <item name="android:windowBackground">@color/surface_dark</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
 

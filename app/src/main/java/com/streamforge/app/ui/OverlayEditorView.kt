@@ -282,21 +282,33 @@ class OverlayEditorView @JvmOverloads constructor(
 
     private fun moveSelectedItem(dx: Float, dy: Float) {
         val item = getSelectedItem() ?: return
-        
-        item.x = (item.x + dx / width).coerceIn(0f, 1f)
-        item.y = (item.y + dy / height).coerceIn(0f, 1f)
-        
+        // A zero-sized view (measured but not laid out yet) would make these divisions produce
+        // NaN, and `coerceIn` passes NaN straight through. That NaN is then PERSISTED, and every
+        // later consumer inherits it — `Float.roundToInt()` throws outright on NaN, so the crash
+        // surfaces much later, when the overlay list or the ticker touches the saved value.
+        if (width <= 0 || height <= 0) return
+
+        item.x = sanitize(item.x + dx / width, item.x)
+        item.y = sanitize(item.y + dy / height, item.y)
+
         itemChangeListener?.invoke(item)
     }
 
     private fun scaleSelectedItem(scaleFactor: Float) {
         val item = getSelectedItem() ?: return
-        
-        item.scale = (item.scale * scaleFactor).coerceIn(0.2f, 5f)
-        
+        // ScaleGestureDetector can hand back a non-finite factor when two pointers land on the
+        // same coordinate (span 0 → division by zero).
+        if (!scaleFactor.isFinite() || scaleFactor <= 0f) return
+
+        item.scale = (item.scale * scaleFactor).coerceIn(MIN_SCALE, MAX_SCALE)
+
         itemChangeListener?.invoke(item)
         invalidate()
     }
+
+    /** Clamp to 0..1, falling back to [fallback] rather than letting a NaN through. */
+    private fun sanitize(value: Float, fallback: Float): Float =
+        if (value.isFinite()) value.coerceIn(0f, 1f) else fallback
 
     private fun getSelectedItem(): OverlayItem? {
         return items.find { it.id == selectedId }
@@ -371,5 +383,10 @@ class OverlayEditorView @JvmOverloads constructor(
         // Smallest half-extent (px) a touch target may shrink to, so heavily-shrunk
         // overlays stay tappable even when their drawn box is only a few pixels.
         const val MIN_TOUCH_HALF_PX = 48f
+
+        // Pinch limits. Same range as the list's size slider (OverlayListAdapter), so a
+        // gesture can't produce a value the slider then can't represent.
+        const val MIN_SCALE = 0.2f
+        const val MAX_SCALE = 5f
     }
 }

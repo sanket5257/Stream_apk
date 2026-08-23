@@ -6,10 +6,10 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.streamforge.app.storage.StreamConfig
 import com.streamforge.app.storage.StreamPrefs
-import kotlinx.coroutines.launch
+import com.streamforge.app.util.isUiAlive
+import com.streamforge.app.util.safeLaunch
 
 /**
  * Shared dialog for entering the stream connection — the ingest/server URL plus the
@@ -19,10 +19,18 @@ import kotlinx.coroutines.launch
  */
 object YoutubeKeyDialog {
 
+    private const val TAG = "YoutubeKeyDialog"
+
     fun show(activity: AppCompatActivity, onSaved: () -> Unit = {}) {
         val prefs = StreamPrefs(activity)
-        activity.lifecycleScope.launch {
+        // Guarded: prefs.load() reaches DataStore and the Android keystore, either of which
+        // can throw. It also suspends, so by the time we come back the activity may be on its
+        // way out — showing a dialog on a window token that's already gone is a BadTokenException
+        // crash, and lifecycleScope alone doesn't prevent it (it only cancels at DESTROYED).
+        activity.safeLaunch(TAG, "opening the stream connection dialog") {
             val current = prefs.load()
+            if (!activity.isUiAlive()) return@safeLaunch
+
             val density = activity.resources.displayMetrics.density
             val pad = (20 * density).toInt()
             val gap = (12 * density).toInt()
@@ -62,7 +70,7 @@ object YoutubeKeyDialog {
                     val url = urlInput.text?.toString()?.trim().orEmpty()
                         .ifBlank { StreamConfig.DEFAULT.rtmpUrl }
                     val key = keyInput.text?.toString()?.trim().orEmpty()
-                    activity.lifecycleScope.launch {
+                    activity.safeLaunch(TAG, "saving the stream key") {
                         prefs.save(current.copy(streamKey = key, rtmpUrl = url))
                         onSaved()
                     }

@@ -12,13 +12,12 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.streamforge.app.auth.AuthManager
 import com.streamforge.app.auth.LoginActivity
 import com.streamforge.app.databinding.ActivityMainBinding
 import com.streamforge.app.storage.StreamConfig
 import com.streamforge.app.storage.StreamPrefs
-import kotlinx.coroutines.launch
+import com.streamforge.app.util.safeLaunch
 
 /**
  * Phase 2B: Stream configuration screen.
@@ -59,6 +58,10 @@ class MainActivity : AppCompatActivity() {
         setupSaveButton()
     }
     
+    private companion object {
+        const val TAG = "MainActivity"
+    }
+
     private fun setupToolbar() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.title = getString(R.string.app_name)
@@ -84,7 +87,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Logout")
             .setMessage("Are you sure you want to logout? This will free up your device slot and you'll need to login again.")
             .setPositiveButton("Logout") { _, _ ->
-                lifecycleScope.launch {
+                safeLaunch(TAG) {
                     authManager.logout()
                     startActivity(Intent(this@MainActivity, LoginActivity::class.java))
                     finish()
@@ -167,6 +170,23 @@ class MainActivity : AppCompatActivity() {
         else -> "Mic"
     }
 
+    /**
+     * Set a Slider to the nearest value it can actually represent — clamped to
+     * [valueFrom]..[valueTo] and rounded onto [stepSize]. Material's setValue() throws
+     * IllegalStateException otherwise, which is not a reasonable failure mode for "show me my
+     * saved settings".
+     */
+    private fun com.google.android.material.slider.Slider.snapTo(target: Float) {
+        val clamped = target.coerceIn(valueFrom, valueTo)
+        val snapped = if (stepSize > 0f) {
+            (valueFrom + Math.round((clamped - valueFrom) / stepSize) * stepSize)
+                .coerceIn(valueFrom, valueTo)
+        } else {
+            clamped
+        }
+        value = snapped
+    }
+
     private fun setupSaveButton() {
         binding.btnSaveAndGoLive.setOnClickListener {
             saveConfig()
@@ -174,7 +194,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadConfig() {
-        lifecycleScope.launch {
+        safeLaunch(TAG) {
             try {
                 val config = streamPrefs.load()
 
@@ -193,10 +213,14 @@ class MainActivity : AppCompatActivity() {
                     binding.actvResolution.setText(resolutions[resolutionIndex].label, false)
                 }
                 
-                // Set bitrates
-                binding.sliderVideoBitrate.value = config.videoBitrateKbps.toFloat()
-                binding.sliderAudioBitrate.value = config.audioBitrateKbps.toFloat()
-                
+                // Set bitrates. Snapped to the slider's own range/step: Material's Slider
+                // THROWS on a value it can't represent, and the saved config can legitimately
+                // hold one (a profile saved by an older build, or a value the encoder fallback
+                // chose). That throw was swallowed by the catch below, so the whole settings
+                // screen silently came up with defaults and an "Error loading config" toast.
+                binding.sliderVideoBitrate.snapTo(config.videoBitrateKbps.toFloat())
+                binding.sliderAudioBitrate.snapTo(config.audioBitrateKbps.toFloat())
+
                 isInitialLoad = false
             } catch (e: Throwable) {
                 android.util.Log.e("MainActivity", "Error loading config", e)
@@ -212,7 +236,7 @@ class MainActivity : AppCompatActivity() {
      * load the current config and preserve those fields rather than exposing them here.
      */
     private fun saveConfig() {
-        lifecycleScope.launch {
+        safeLaunch(TAG) {
             try {
                 val current = streamPrefs.load()
 
