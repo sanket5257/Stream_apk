@@ -59,8 +59,12 @@ version, build, upload the APK, edit the JSON.
 
 4. **Upload the APK** to a GitHub release tagged `v0.2.0` (or wherever you host).
 
-5. **Update the manifest** at `UPDATE_MANIFEST_URL` — `release/version.json` in this repo is
-   the template:
+5. **Update the manifest** at `UPDATE_MANIFEST_URL`. That URL resolves to **`version.json` at
+   the repo root on `main`** — that exact file is what every installed app polls, so it has to
+   be committed and pushed, not just edited locally.
+
+   > `release/` is in `.gitignore`, so a manifest left in `release/version.json` is invisible
+   > to the updater. Edit the root `version.json`.
 
    ```json
    {

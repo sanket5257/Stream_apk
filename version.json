@@ -1,0 +1,7 @@
+{
+  "versionCode": 3,
+  "versionName": "0.2.1",
+  "apkUrl": "https://github.com/sanket5257/Stream_apk/releases/download/v0.2.1/streamforge.apk",
+  "notes": "Stability release — fixes the crashes that dropped you back to the home screen.\n\n• Fixed crashes when opening the overlay manager with photo or video overlays\n• Fixed the app dying after returning from the gallery picker while live\n• Fixed the crash when flipping the camera\n• The stream no longer stops when a dialog or the notification shade covers the screen\n• Fixed the black preview after switching back to the app\n• Quality settings now load correctly instead of falling back to defaults\n• Lower memory use for image and web overlays\n• If the app does close unexpectedly, it now tells you why on the next launch",
+  "mandatory": false
+}
