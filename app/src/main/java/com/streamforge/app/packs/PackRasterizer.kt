@@ -12,6 +12,7 @@ import android.graphics.Typeface
 import android.net.Uri
 import android.util.Log
 import android.util.LruCache
+import com.streamforge.app.util.CrashReporter
 import kotlin.math.roundToInt
 
 /**
@@ -34,6 +35,19 @@ object PackRasterizer {
     data class Rendered(val bitmap: Bitmap, val aspect: Float)
 
     /**
+     * Why the last [render] call produced nothing, or null if the last one worked.
+     *
+     * A graphic that fails to draw is invisible by definition: the preview well stays empty
+     * and the broadcast carries on without it, with nothing on screen to say why. That is
+     * exactly the failure this feature was reported with, and it cost a diagnosis that a
+     * one-line message would have answered. The editor shows this string, and every setter
+     * also writes the throwable to the non-fatal log.
+     */
+    @Volatile
+    var lastFailure: String? = null
+        private set
+
+    /**
      * Decoded logos, keyed by URI + target box. A scoreboard re-rasterizes on every "+1" tap,
      * and re-decoding a channel logo from storage each time would make the live control panel
      * feel sluggish exactly when it must not.
@@ -42,8 +56,8 @@ object PackRasterizer {
 
     /**
      * Render [pack] with [values] at [targetWidthPx] pixels wide.
-     * Returns null if nothing could be drawn, so the caller skips the attach rather than
-     * uploading an empty texture.
+     * Returns null if nothing could be drawn — the caller skips the attach rather than
+     * uploading an empty texture, and [lastFailure] says why.
      */
     fun render(
         context: Context,
@@ -52,7 +66,15 @@ object PackRasterizer {
         theme: PackTheme,
         targetWidthPx: Int,
     ): Rendered? {
-        if (pack.canvas.w <= 0 || pack.canvas.h <= 0) return null
+        if (pack.canvas.w <= 0 || pack.canvas.h <= 0) {
+            return fail(
+                "Pack ${pack.id} has an empty canvas (${pack.canvas.w}×${pack.canvas.h})",
+                null,
+            )
+        }
+        if (pack.elements.isEmpty()) {
+            return fail("Pack ${pack.id} has no elements to draw", null)
+        }
 
         val width = targetWidthPx.coerceIn(MIN_TARGET_PX, MAX_TARGET_PX)
         val scale = width.toFloat() / pack.canvas.w
@@ -64,6 +86,8 @@ object PackRasterizer {
             val canvas = Canvas(bitmap)
             canvas.scale(scale, scale)
 
+            var drawn = 0
+            var lastElementError: Throwable? = null
             pack.elements.forEach { element ->
                 try {
                     if (!isVisible(element, values)) return@forEach
@@ -72,20 +96,38 @@ object PackRasterizer {
                         PackElementKind.TEXT -> drawText(canvas, element, pack, values, theme)
                         PackElementKind.IMAGE -> drawImage(context, canvas, element, values, scale)
                     }
+                    drawn++
                 } catch (t: Throwable) {
                     // One bad element (a malformed colour, an unreadable logo) should cost that
                     // element, not the whole graphic — a scoreboard missing its crest still
                     // shows the score.
+                    lastElementError = t
                     Log.e(TAG, "Element ${element.kind} failed in pack ${pack.id}", t)
+                    CrashReporter.recordNonFatal(TAG, "drawing a ${element.kind} in ${pack.id}", t)
                 }
             }
+            // Every element failing (or every one being hidden) yields a fully transparent
+            // texture, which reaches the user as "the graphic doesn't work" with no error
+            // anywhere. Report it as the failure it is instead of uploading nothing.
+            if (drawn == 0) {
+                bitmap.recycle()
+                return fail("Nothing in ${pack.id} could be drawn", lastElementError)
+            }
+            lastFailure = null
             Rendered(bitmap, pack.canvas.aspect)
         } catch (t: Throwable) {
             // Throwable: bitmap allocation is exactly where OutOfMemoryError shows up, and a
             // missing graphic is recoverable where a dead process mid-broadcast is not.
-            Log.e(TAG, "Rasterizing pack ${pack.id} failed", t)
-            null
+            fail("Couldn't draw ${pack.id}: ${t.javaClass.simpleName}: ${t.message}", t)
         }
+    }
+
+    /** Record why nothing was drawn, and return null for the caller to skip the attach. */
+    private fun fail(reason: String, cause: Throwable?): Rendered? {
+        lastFailure = reason
+        Log.e(TAG, reason, cause)
+        CrashReporter.recordNonFatal(TAG, reason, cause ?: IllegalStateException(reason))
+        return null
     }
 
     /** Clear cached logo bitmaps. Called when the renderer tears down. */
@@ -284,7 +326,14 @@ object PackRasterizer {
         }
     }
 
-    private val PLACEHOLDER = Regex("\\{([A-Za-z0-9_]+)}")
+    /**
+     * Both braces are escaped deliberately. Android's regex engine is ICU, not the JDK's, and
+     * ICU rejects a bare `}` as a syntax error where the JDK quietly accepts it as a literal.
+     * An unescaped one here threw from this object's initializer, so `PackRasterizer` failed
+     * to load at all and every graphics render — editor preview and live overlay alike — died
+     * with NoClassDefFoundError. A JVM unit test can never catch this; only a device can.
+     */
+    private val PLACEHOLDER = Regex("\\{([A-Za-z0-9_]+)\\}")
     private val REGULAR_FACE: Typeface = Typeface.create("sans-serif", Typeface.NORMAL)
     private val BOLD_FACE: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
 

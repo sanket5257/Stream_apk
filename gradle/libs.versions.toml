@@ -45,6 +45,7 @@ kotlinxSerialization = "1.6.3"
 
 # Testing
 junit = "4.13.2"
+robolectric = "4.13"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
 
@@ -95,6 +96,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 
 # Testing
 junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-junit = { module = "androidx.test.ext:junit", version.ref = "androidxJunit" }
 androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 

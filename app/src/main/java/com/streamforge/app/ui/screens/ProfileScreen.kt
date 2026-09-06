@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Brightness6
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SupportAgent
@@ -73,6 +74,7 @@ fun ProfileScreen(
     onUpgrade: () -> Unit,
     onCheckUpdate: () -> Unit,
     onContactSupport: () -> Unit,
+    onDiagnostics: () -> Unit,
     onLogout: () -> Unit,
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -173,6 +175,13 @@ fun ProfileScreen(
                     title = "Check for updates",
                     subtitle = updateSubtitle,
                     onClick = onCheckUpdate,
+                )
+                SfDivider()
+                SfRow(
+                    icon = Icons.Filled.BugReport,
+                    title = "Diagnostics",
+                    subtitle = "Errors the app recovered from",
+                    onClick = onDiagnostics,
                 )
                 SfDivider()
                 SfRow(

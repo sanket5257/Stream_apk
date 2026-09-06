@@ -16,6 +16,7 @@ import com.pedro.library.base.Camera2Base
 import com.streamforge.app.packs.PackCatalog
 import com.streamforge.app.packs.PackRasterizer
 import com.streamforge.app.packs.PackTheme
+import com.streamforge.app.util.CrashReporter
 import com.streamforge.app.util.safeLaunch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -916,7 +917,13 @@ class OverlayRenderer(
      */
     private fun applyPack(filter: ImageObjectFilterRender, item: OverlayItem.Pack): Boolean {
         val definition = packCatalog.byId(item.packId) ?: run {
-            android.util.Log.w(TAG, "No pack definition for ${item.packId}")
+            // Silently skipping here is what "the graphic never appears on the stream" looks
+            // like from the outside, so say which pack and what the catalogue actually holds —
+            // an empty catalogue and one missing id are very different faults.
+            val reason = "No pack definition for ${item.packId} " +
+                "(catalogue holds ${packCatalog.all.size}: ${packCatalog.all.joinToString { it.id }})"
+            android.util.Log.w(TAG, reason)
+            CrashReporter.recordNonFatal(TAG, reason, IllegalStateException(reason))
             return false
         }
 
@@ -933,7 +940,15 @@ class OverlayRenderer(
             values = values,
             theme = PackTheme.byKey(item.themeKey),
             targetWidthPx = target,
-        ) ?: return false
+        ) ?: run {
+            // PackRasterizer has already logged the reason; note that it cost an on-air
+            // graphic, since from the stream's side this is just a missing overlay.
+            android.util.Log.e(
+                TAG,
+                "Pack ${item.packId} produced no texture: ${PackRasterizer.lastFailure}",
+            )
+            return false
+        }
 
         contentAspect[item.id] = rendered.aspect
         textSignatures[item.id] = signature

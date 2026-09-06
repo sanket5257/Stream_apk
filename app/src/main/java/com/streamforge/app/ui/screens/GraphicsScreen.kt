@@ -109,6 +109,21 @@ fun GraphicsScreen(
                 )
             }
 
+            // An empty catalogue renders as an empty screen, which reads as "the feature is
+            // broken" with nothing to report. Say what actually happened instead.
+            if (catalog.isEmpty()) {
+                SfSectionHeader("Add a graphic")
+                SfCard {
+                    Text(
+                        text = "No graphics could be loaded from this build. " +
+                            "Profile › Diagnostics has the details.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+
             val byCategory = catalog.groupBy { it.category }
             PackCategory.entries.forEach { category ->
                 val packs = byCategory[category].orEmpty()

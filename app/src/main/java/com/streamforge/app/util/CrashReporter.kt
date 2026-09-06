@@ -139,6 +139,19 @@ object CrashReporter {
         }
     }
 
+    /**
+     * Drop both logs. Offered from the Diagnostics screen so a user who has already sent a
+     * report can start from a clean slate and capture only the next failure.
+     */
+    fun clearAll(context: Context) {
+        clear(context)
+        try {
+            File(context.applicationContext.filesDir, NON_FATAL_FILE_NAME).delete()
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to clear non-fatals", t)
+        }
+    }
+
     /** Drop the stored report once the user has seen (or dismissed) it. */
     fun clear(context: Context) {
         try {

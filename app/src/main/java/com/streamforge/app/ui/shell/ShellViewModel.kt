@@ -122,7 +122,12 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { _scenes.value = sceneStore.load() }
                 .onFailure { Log.e(TAG, "Loading scenes failed", it) }
             runCatching { _catalog.value = PackCatalog.load(getApplication()).all }
-                .onFailure { Log.e(TAG, "Loading pack catalogue failed", it) }
+                .onFailure {
+                    Log.e(TAG, "Loading pack catalogue failed", it)
+                    // Without this the Graphics screen is simply empty, with no crash and no
+                    // trace of why — the exact shape of the "graphics don't work" report.
+                    CrashReporter.recordNonFatal(TAG, "loading the pack catalogue", it)
+                }
             runCatching { _config.value = streamPrefs.load() }
                 .onFailure { Log.e(TAG, "Loading stream config failed", it) }
             runCatching { _entitlement.value = entitlementStore.current() }

@@ -902,8 +902,14 @@ class StreamActivity : AppCompatActivity() {
         try {
             if (!camera.isOnPreview && binding.openGlView.holder.surface?.isValid == true) {
                 startPreviewAtConfiguredResolution(currentFacing())
-                loadAndApplyOverlays()
             }
+            // ALWAYS, not only when the preview had to be restarted. Graphics are added on the
+            // Graphics screen, in the other activity, and come back to a studio that may never
+            // have been torn down — while streaming the preview is deliberately left running,
+            // so the restart branch above doesn't fire and the newly added graphic would never
+            // reach the frame. That is "I added a graphic and nothing appears on camera".
+            // reconcile() is a diff, so re-applying an unchanged list is a no-op.
+            loadAndApplyOverlays()
             startAudioLevelMonitoring()
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Resuming the preview failed", e)

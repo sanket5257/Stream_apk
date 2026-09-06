@@ -42,22 +42,23 @@ android {
         targetSdk = 34
         // VERSIONING — read before changing either number.
         //
-        // versionName is what people see. 1.0.1 is the crash-hardening release: the click
-        // handlers, view-model writes and studio controls that could take the process down
-        // are all guarded, so an option that fails now reports itself instead of dropping
-        // the user back at the launcher.
+        // versionName is what people see. 1.0.3 is the graphics release: it fixes the bad
+        // regex that stopped PackRasterizer loading at all — so nothing drew, anywhere — and
+        // adds the Diagnostics screen that made the failure findable on a phone with no
+        // USB debugging. A graphic added on the Graphics screen also now reaches a studio
+        // that was already open, and one that fails to draw says why instead of an empty box.
         //
         // versionCode is the ONLY value Android compares, and it can NEVER go down OR repeat.
-        // 1.0.0 shipped as 4 and 1.0.1 as 5, so this must be 6. Tagging a GitHub release
-        // "v1.0.2" does NOT change these numbers — they live here, and an APK built without
+        // 1.0.0 shipped as 4, 1.0.1 as 5 and 1.0.2 as 6, so this must be 7. Tagging a GitHub release
+        // "v1.0.3" does NOT change these numbers — they live here, and an APK built without
         // bumping them carries the old version as far as every phone is concerned, which is
         // exactly how a "released" update reaches nobody.
         //
         // A device only offers an update when the manifest's versionCode is strictly GREATER
         // than the installed one. Shipping the same code twice means no one is ever prompted,
         // however many GitHub releases exist.
-        versionCode = 6
-        versionName = "1.0.2"
+        versionCode = 7
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -147,6 +148,9 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    // Robolectric needs the merged resources and manifest to stand up an Android context.
+    testOptions { unitTests { isIncludeAndroidResources = true } }
 
     buildFeatures {
         // viewBinding stays on: the Compose migration is incremental, and the camera
@@ -279,6 +283,9 @@ dependencies {
 
     // Tests
     testImplementation(libs.junit)
+    // Robolectric runs the platform graphics stack on the JVM, so PackRasterizerTest can
+    // assert what a graphics pack actually DRAWS -- not just that its JSON parses.
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

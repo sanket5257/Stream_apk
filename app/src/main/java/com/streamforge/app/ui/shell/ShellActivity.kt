@@ -1,6 +1,8 @@
 package com.streamforge.app.ui.shell
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -32,6 +34,7 @@ import com.streamforge.app.billing.LicenseManager
 import com.streamforge.app.billing.Tier
 import com.streamforge.app.overlay.OverlayItem
 import com.streamforge.app.ui.screens.DestinationsScreen
+import com.streamforge.app.ui.screens.DiagnosticsScreen
 import com.streamforge.app.ui.screens.GraphicsScreen
 import com.streamforge.app.ui.screens.HomeScreen
 import com.streamforge.app.ui.screens.PackEditorScreen
@@ -148,6 +151,7 @@ private object Routes {
     const val SCENES = "scenes"
     const val QUALITY = "quality"
     const val PROFILE = "profile"
+    const val DIAGNOSTICS = "diagnostics"
     const val UPGRADE = "upgrade"
 
     fun packEditor(overlayId: String) = "pack/$overlayId"
@@ -353,6 +357,7 @@ private fun ShellNavigation(
                     onContactSupport = safeAction(NAV_TAG, "opening support", onFailure) {
                         context.openSupport(contact, null)
                     },
+                    onDiagnostics = { navigate(Routes.DIAGNOSTICS) },
                     onLogout = {
                         // Logging out must always land the user at the login screen. If
                         // clearing the session throws (an unreadable keystore, a backend that
@@ -375,6 +380,33 @@ private fun ShellNavigation(
                                 activity.finish()
                             }
                         }
+                    },
+                )
+            }
+
+            composable(Routes.DIAGNOSTICS) {
+                DiagnosticsScreen(
+                    // Read during composition, so guarded: the log lives in a file that may be
+                    // missing, empty or unreadable, and none of those is worth a dead screen.
+                    report = safeGet(NAV_TAG, "reading the diagnostics log", "") {
+                        buildString {
+                            CrashReporter.readNonFatals(context)?.let {
+                                appendLine("== Errors the app recovered from ==")
+                                appendLine(it)
+                            }
+                            CrashReporter.readReport(context)?.let {
+                                appendLine("== Last crash ==")
+                                appendLine(it)
+                            }
+                        }.trim()
+                    },
+                    onBack = goBack,
+                    onCopy = safeAction1(NAV_TAG, "copying the diagnostics log", onFailure) { text: String ->
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        clipboard?.setPrimaryClip(ClipData.newPlainText("StreamForge diagnostics", text))
+                    },
+                    onClear = safeAction(NAV_TAG, "clearing the diagnostics log", onFailure) {
+                        CrashReporter.clearAll(context)
                     },
                 )
             }

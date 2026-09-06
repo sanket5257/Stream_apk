@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.streamforge.app.overlay.OverlayItem
 import com.streamforge.app.packs.GraphicsPack
@@ -87,6 +88,9 @@ fun PackEditorScreen(
     var values by remember(overlay.id) { mutableStateOf(definition.defaultValues() + overlay.values) }
     var themeKey by remember(overlay.id) { mutableStateOf(overlay.themeKey) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
+    // Why the preview is empty, when it is. A blank well tells the user nothing and left the
+    // last report ("graphics render not working") with no evidence to act on.
+    var previewError by remember { mutableStateOf<String?>(null) }
 
     // Re-render the preview whenever the content changes. Off the main thread: this is real
     // bitmap work, and doing it in composition would jank every keystroke.
@@ -95,8 +99,8 @@ fun PackEditorScreen(
         // propagates out of the composition's coroutine and ends the process. The rasterizer
         // handles its own failures, but the theme lookup and bitmap hand-off sit outside it,
         // and a dead preview is never worth closing the app over.
-        preview = try {
-            withContext(Dispatchers.Default) {
+        try {
+            val bitmap = withContext(Dispatchers.Default) {
                 PackRasterizer.render(
                     context = context,
                     pack = definition,
@@ -105,11 +109,18 @@ fun PackEditorScreen(
                     targetWidthPx = PREVIEW_WIDTH_PX,
                 )?.bitmap
             }
+            preview = bitmap
+            // The rasterizer reports its own reason; surface it rather than leaving the well
+            // empty, since this is the same draw that feeds the broadcast.
+            previewError = if (bitmap == null) {
+                PackRasterizer.lastFailure ?: "This graphic produced nothing to draw."
+            } else null
         } catch (t: Throwable) {
             android.util.Log.e("PackEditor", "Rendering the preview failed", t)
             com.streamforge.app.util.CrashReporter
                 .recordNonFatal("PackEditor", "rendering the preview", t)
-            null
+            preview = null
+            previewError = "${t.javaClass.simpleName}: ${t.message}"
         }
     }
 
@@ -145,7 +156,7 @@ fun PackEditorScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            PreviewPanel(preview, definition)
+            PreviewPanel(preview, previewError, definition)
 
             val grouped = definition.fields.groupBy { it.group }
             grouped.forEach { (group, fields) ->
@@ -204,7 +215,7 @@ fun PackEditorScreen(
 }
 
 @Composable
-private fun PreviewPanel(preview: Bitmap?, definition: GraphicsPack) {
+private fun PreviewPanel(preview: Bitmap?, error: String?, definition: GraphicsPack) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
         Box(
             modifier = Modifier
@@ -225,6 +236,18 @@ private fun PreviewPanel(preview: Bitmap?, definition: GraphicsPack) {
                     modifier = Modifier
                         .fillMaxWidth(definition.defaultWidth.coerceIn(0.2f, 1f))
                         .padding(8.dp),
+                )
+            } else if (error != null) {
+                // The same draw feeds the broadcast, so a failure here is a failure on air.
+                // Saying so — with the reason — is what turns "it doesn't work" into a report
+                // that can be acted on.
+                Text(
+                    "This graphic couldn't be drawn.\n$error\n\n" +
+                        "Profile › Diagnostics has the full log.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(16.dp),
                 )
             } else {
                 Text(
