@@ -50,6 +50,9 @@ import com.streamforge.app.ui.studio.StudioUiState
 import com.streamforge.app.ui.theme.StreamForgeCameraTheme
 import com.streamforge.app.util.PermissionHelper
 import com.streamforge.app.util.isUiAlive
+import com.streamforge.app.util.safeAction
+import com.streamforge.app.util.safeAction1
+import com.streamforge.app.util.safeAction2
 import com.streamforge.app.util.safeLaunch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -165,23 +168,36 @@ class StreamActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Every studio control, wrapped.
+     *
+     * These fire on the main thread from the Compose chrome, so an uncaught throw in any of
+     * them ends the process — and doing that mid-broadcast is the single worst failure this
+     * app has. The handlers below already guard the calls known to be fragile (the encoder,
+     * GL, the camera); [safeAction] catches whatever is left, so the worst case is a control
+     * that appears not to respond while the stream keeps running.
+     */
     private val callbacks = StudioCallbacks(
-        onGoLive = { handleGoLiveClick() },
-        onStop = { handleGoLiveClick() },
-        onSwitchCamera = { switchCamera() },
-        onToggleMute = { toggleMute() },
-        onRotate = { cycleScreenOrientation() },
-        onManageOverlays = { showOverlayManager() },
-        onTogglePanel = { panel ->
+        onGoLive = safeAction(TAG, "going live") { handleGoLiveClick() },
+        onStop = safeAction(TAG, "stopping the stream") { handleGoLiveClick() },
+        onSwitchCamera = safeAction(TAG, "switching camera") { switchCamera() },
+        onToggleMute = safeAction(TAG, "toggling mute") { toggleMute() },
+        onRotate = safeAction(TAG, "rotating the screen") { cycleScreenOrientation() },
+        onManageOverlays = safeAction(TAG, "opening the overlay manager") { showOverlayManager() },
+        onTogglePanel = safeAction1(TAG, "opening a panel") { panel: StudioPanel ->
             uiState = uiState.copy(
                 openPanel = if (uiState.openPanel == panel) StudioPanel.NONE else panel
             )
         },
-        onSelectPack = { id -> uiState = uiState.copy(activePackOverlayId = id) },
-        onPackAction = { overlayId, action -> applyPackAction(overlayId, action) },
-        onSelectScene = { id -> selectScene(id) },
-        onSaveScene = { id -> saveScene(id) },
-        onExit = { finish() },
+        onSelectPack = safeAction1(TAG, "selecting a pack") { id: String ->
+            uiState = uiState.copy(activePackOverlayId = id)
+        },
+        onPackAction = safeAction2(TAG, "applying a pack action") { overlayId: String, action: PackAction ->
+            applyPackAction(overlayId, action)
+        },
+        onSelectScene = safeAction1(TAG, "switching scene") { id: String -> selectScene(id) },
+        onSaveScene = safeAction1(TAG, "saving a scene") { id: String -> saveScene(id) },
+        onExit = safeAction(TAG, "leaving the studio") { finish() },
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -401,6 +417,14 @@ class StreamActivity : AppCompatActivity() {
         val config = streamConfig
         if (config == null) {
             Toast.makeText(this, "Configuration not loaded", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // The chrome is on screen from the moment the activity draws, but the camera pipeline
+        // is only built once the permission dialog is answered. Tapping Go Live in that gap
+        // would touch an uninitialised lateinit and take the process down.
+        if (!::streamManager.isInitialized) {
+            Toast.makeText(this, "Camera is still starting up", Toast.LENGTH_SHORT).show()
             return
         }
 

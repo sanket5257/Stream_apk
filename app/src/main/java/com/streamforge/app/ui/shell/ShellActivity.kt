@@ -44,8 +44,14 @@ import com.streamforge.app.ui.screens.UpgradeScreen
 import com.streamforge.app.ui.theme.StreamForgeTheme
 import com.streamforge.app.update.UpdateFlow
 import com.streamforge.app.util.CrashDialog
+import com.streamforge.app.util.CrashReporter
+import com.streamforge.app.util.runGuarded
+import com.streamforge.app.util.safeAction
+import com.streamforge.app.util.safeAction1
+import com.streamforge.app.util.safeAction2
+import com.streamforge.app.util.safeAction3
+import com.streamforge.app.util.safeGet
 import com.streamforge.app.util.safeLaunch
-import kotlinx.coroutines.launch
 
 /**
  * The whole app outside the studio, in one activity.
@@ -57,6 +63,14 @@ import kotlinx.coroutines.launch
  *
  * The studio stays a separate activity because it needs a different orientation, a different
  * theme, and a camera lifecycle that has nothing to do with these screens.
+ *
+ * ## Every callback handed to a screen is wrapped
+ *
+ * The screens below are pure Compose and take plain lambdas. Those lambdas run on the main
+ * thread with nothing above them but the framework's uncaught-exception handler, so a throw
+ * in any of them ends the process — which the user experiences as the app vanishing to the
+ * launcher when they press a button. Wrapping each one in [safeAction] turns the worst case
+ * into "that button didn't appear to do anything, and a message said so".
  */
 class ShellActivity : AppCompatActivity() {
 
@@ -85,19 +99,23 @@ class ShellActivity : AppCompatActivity() {
 
         // Sideloaded builds have nobody to tell them an update exists, so check here — quietly,
         // at most twice a day, and never while the user is mid-stream (this screen isn't).
-        UpdateFlow.checkSilently(this)
+        runGuarded(TAG, "checking for updates") { UpdateFlow.checkSilently(this) }
 
         // Re-check the licence quietly on launch. Failures leave the cached entitlement alone,
         // so a bad connection never downgrades a paying customer.
         lifecycleScope.safeLaunch(TAG, "refreshing licence") { licenseManager.refresh() }
     }
 
-    private fun savedThemeChoice(): ThemeChoice = when (
-        uiPrefs.getInt(KEY_NIGHT_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
-    ) {
-        AppCompatDelegate.MODE_NIGHT_NO -> ThemeChoice.LIGHT
-        AppCompatDelegate.MODE_NIGHT_YES -> ThemeChoice.DARK
-        else -> ThemeChoice.SYSTEM
+    /**
+     * Guarded: this is read during composition, so an unreadable preferences file would take
+     * the whole screen down before it ever drew.
+     */
+    private fun savedThemeChoice(): ThemeChoice = safeGet(TAG, "reading the saved theme", ThemeChoice.SYSTEM) {
+        when (uiPrefs.getInt(KEY_NIGHT_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)) {
+            AppCompatDelegate.MODE_NIGHT_NO -> ThemeChoice.LIGHT
+            AppCompatDelegate.MODE_NIGHT_YES -> ThemeChoice.DARK
+            else -> ThemeChoice.SYSTEM
+        }
     }
 
     private fun applyThemeChoice(choice: ThemeChoice) {
@@ -115,6 +133,12 @@ class ShellActivity : AppCompatActivity() {
         const val KEY_NIGHT_MODE = "night_mode"
     }
 }
+
+/** Tag for everything logged out of the navigation graph below. */
+private const val NAV_TAG = "ShellNavigation"
+
+/** What the user is told when a guarded action failed and there is nothing more specific. */
+private const val GENERIC_FAILURE = "Something went wrong. That didn't go through — please try again."
 
 private object Routes {
     const val HOME = "home"
@@ -164,6 +188,20 @@ private fun ShellNavigation(
         viewModel.consumeMessage()
     }
 
+    /** Show a message without ever being the thing that fails. */
+    val notify: (String) -> Unit = { text ->
+        scope.safeLaunch(NAV_TAG, "showing a message") { snackbarHost.showSnackbar(text) }
+    }
+
+    // Handed to every guarded callback: the action already failed, so the only job left is to
+    // tell the user rather than leaving a button that silently does nothing.
+    val onFailure: (Throwable) -> Unit = { notify(GENERIC_FAILURE) }
+
+    // Navigation itself can throw — a route that no longer exists in the graph, or a pop
+    // racing the activity's teardown. Route every move through these two.
+    val navigate = safeAction1<String>(NAV_TAG, "opening a screen", onFailure) { navController.navigate(it) }
+    val goBack = safeAction(NAV_TAG, "going back", onFailure) { navController.popBackStack() }
+
     val tier = entitlement.effectiveTier()
     val contact = SupportContact(
         whatsApp = BuildConfig.SUPPORT_WHATSAPP,
@@ -185,13 +223,15 @@ private fun ShellNavigation(
                     scenes = scenes,
                     tier = tier,
                     resolutionLabel = "${config.height}p · ${config.fps} fps · ${config.videoBitrateKbps} kbps",
-                    onGoLive = { activity.startActivity(Intent(activity, StreamActivity::class.java)) },
-                    onDestinations = { navController.navigate(Routes.DESTINATIONS) },
-                    onGraphics = { navController.navigate(Routes.GRAPHICS) },
-                    onScenes = { navController.navigate(Routes.SCENES) },
-                    onQuality = { navController.navigate(Routes.QUALITY) },
-                    onProfile = { navController.navigate(Routes.PROFILE) },
-                    onUpgrade = { navController.navigate(Routes.UPGRADE) },
+                    onGoLive = safeAction(NAV_TAG, "opening the studio", onFailure) {
+                        activity.startActivity(Intent(activity, StreamActivity::class.java))
+                    },
+                    onDestinations = { navigate(Routes.DESTINATIONS) },
+                    onGraphics = { navigate(Routes.GRAPHICS) },
+                    onScenes = { navigate(Routes.SCENES) },
+                    onQuality = { navigate(Routes.QUALITY) },
+                    onProfile = { navigate(Routes.PROFILE) },
+                    onUpgrade = { navigate(Routes.UPGRADE) },
                 )
             }
 
@@ -199,11 +239,11 @@ private fun ShellNavigation(
                 DestinationsScreen(
                     destinations = destinations,
                     tier = tier,
-                    onBack = { navController.popBackStack() },
-                    onSave = viewModel::saveDestination,
-                    onToggle = viewModel::toggleDestination,
-                    onDelete = viewModel::removeDestination,
-                    onUpgrade = { navController.navigate(Routes.UPGRADE) },
+                    onBack = goBack,
+                    onSave = safeAction1(NAV_TAG, "saving a destination", onFailure, viewModel::saveDestination),
+                    onToggle = safeAction1(NAV_TAG, "toggling a destination", onFailure, viewModel::toggleDestination),
+                    onDelete = safeAction1(NAV_TAG, "deleting a destination", onFailure, viewModel::removeDestination),
+                    onUpgrade = { navigate(Routes.UPGRADE) },
                 )
             }
 
@@ -212,31 +252,43 @@ private fun ShellNavigation(
                     catalog = catalog,
                     overlays = overlays,
                     tier = tier,
-                    onBack = { navController.popBackStack() },
-                    onAdd = viewModel::addPack,
-                    onEdit = { navController.navigate(Routes.packEditor(it)) },
-                    onRemove = viewModel::removeOverlay,
-                    onUpgrade = { navController.navigate(Routes.UPGRADE) },
+                    onBack = goBack,
+                    onAdd = safeAction1(NAV_TAG, "adding a graphics pack", onFailure, viewModel::addPack),
+                    onEdit = safeAction1(NAV_TAG, "opening the pack editor", onFailure) {
+                        navController.navigate(Routes.packEditor(it))
+                    },
+                    onRemove = safeAction1(NAV_TAG, "removing a graphic", onFailure, viewModel::removeOverlay),
+                    onUpgrade = { navigate(Routes.UPGRADE) },
                 )
             }
 
             composable(Routes.PACK_EDITOR) { entry ->
-                val overlayId = entry.arguments?.getString("overlayId")
-                val overlay = overlays.firstOrNull { it.id == overlayId } as? OverlayItem.Pack
-                val definition = overlay?.let { viewModel.packById(it.packId) }
+                // Guarded: a malformed route argument must not take the screen down on the way
+                // to rendering it.
+                val overlay = safeGet<OverlayItem.Pack?>(NAV_TAG, "resolving the pack being edited", null) {
+                    val overlayId = entry.arguments?.getString("overlayId")
+                    overlays.firstOrNull { it.id == overlayId } as? OverlayItem.Pack
+                }
+                val definition = overlay?.let {
+                    safeGet(NAV_TAG, "resolving the pack definition", null) { viewModel.packById(it.packId) }
+                }
 
                 // The overlay can vanish underneath this screen (deleted from the studio's
                 // overlay sheet), so pop rather than rendering a half-empty editor.
                 if (overlay == null || definition == null) {
-                    LaunchedEffect(Unit) { navController.popBackStack() }
+                    LaunchedEffect(Unit) { goBack() }
                 } else {
                     PackEditorScreen(
                         overlay = overlay,
                         definition = definition,
-                        onBack = { navController.popBackStack() },
-                        onValuesChange = { viewModel.updatePackValues(overlay.id, it) },
-                        onThemeChange = { viewModel.updatePackTheme(overlay.id, it) },
-                        onRemove = {
+                        onBack = goBack,
+                        onValuesChange = safeAction1(NAV_TAG, "editing pack values", onFailure) {
+                            viewModel.updatePackValues(overlay.id, it)
+                        },
+                        onThemeChange = safeAction1(NAV_TAG, "changing the pack theme", onFailure) {
+                            viewModel.updatePackTheme(overlay.id, it)
+                        },
+                        onRemove = safeAction(NAV_TAG, "removing a pack", onFailure) {
                             viewModel.removeOverlay(overlay.id)
                             navController.popBackStack()
                         },
@@ -250,12 +302,14 @@ private fun ShellNavigation(
                     overlays = overlays,
                     catalog = catalog,
                     tier = tier,
-                    onBack = { navController.popBackStack() },
-                    onAdd = viewModel::addScene,
-                    onRename = viewModel::renameScene,
-                    onRemove = viewModel::removeScene,
-                    onSetVisibility = viewModel::setSceneVisibility,
-                    onUpgrade = { navController.navigate(Routes.UPGRADE) },
+                    onBack = goBack,
+                    onAdd = safeAction1(NAV_TAG, "adding a scene", onFailure, viewModel::addScene),
+                    onRename = safeAction2(NAV_TAG, "renaming a scene", onFailure, viewModel::renameScene),
+                    onRemove = safeAction1(NAV_TAG, "removing a scene", onFailure, viewModel::removeScene),
+                    onSetVisibility = safeAction3(
+                        NAV_TAG, "changing what a scene shows", onFailure, viewModel::setSceneVisibility,
+                    ),
+                    onUpgrade = { navigate(Routes.UPGRADE) },
                 )
             }
 
@@ -263,36 +317,63 @@ private fun ShellNavigation(
                 QualityScreen(
                     config = config,
                     tier = tier,
-                    activeDestinationCount = viewModel.activeDestinations().size,
-                    onBack = { navController.popBackStack() },
-                    onSave = viewModel::saveConfig,
-                    onUpgrade = { navController.navigate(Routes.UPGRADE) },
+                    activeDestinationCount = safeGet(NAV_TAG, "counting active destinations", 0) {
+                        viewModel.activeDestinations().size
+                    },
+                    onBack = goBack,
+                    onSave = safeAction1(NAV_TAG, "saving quality settings", onFailure, viewModel::saveConfig),
+                    onUpgrade = { navigate(Routes.UPGRADE) },
                 )
             }
 
             composable(Routes.PROFILE) {
                 ProfileScreen(
-                    username = authManager.getUsername() ?: "Account",
-                    deviceName = DeviceHelper.getDeviceName(),
+                    // Read through safeGet: this touches stored credentials during composition,
+                    // and an unreadable store would otherwise crash on the way to drawing.
+                    username = safeGet(NAV_TAG, "reading the username", "Account") {
+                        authManager.getUsername() ?: "Account"
+                    },
+                    deviceName = safeGet(NAV_TAG, "reading the device name", "This device") {
+                        DeviceHelper.getDeviceName()
+                    },
                     versionName = BuildConfig.VERSION_NAME,
                     tier = tier,
                     entitlement = entitlement,
                     themeChoice = currentTheme,
                     updateSubtitle = "You're on v${BuildConfig.VERSION_NAME}",
-                    onBack = { navController.popBackStack() },
-                    onThemeChange = { currentTheme = it; onThemeChange(it) },
-                    onUpgrade = { navController.navigate(Routes.UPGRADE) },
-                    onCheckUpdate = { UpdateFlow.checkManually(activity) },
-                    onContactSupport = { context.openSupport(contact, null) },
+                    onBack = goBack,
+                    onThemeChange = safeAction1(NAV_TAG, "changing the theme", onFailure) {
+                        currentTheme = it
+                        onThemeChange(it)
+                    },
+                    onUpgrade = { navigate(Routes.UPGRADE) },
+                    onCheckUpdate = safeAction(NAV_TAG, "checking for updates", onFailure) {
+                        UpdateFlow.checkManually(activity)
+                    },
+                    onContactSupport = safeAction(NAV_TAG, "opening support", onFailure) {
+                        context.openSupport(contact, null)
+                    },
                     onLogout = {
-                        scope.launch {
-                            authManager.logout()
-                            activity.startActivity(
-                                Intent(activity, LoginActivity::class.java).addFlags(
-                                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        // Logging out must always land the user at the login screen. If
+                        // clearing the session throws (an unreadable keystore, a backend that
+                        // won't answer), the sign-out still has to complete locally rather
+                        // than stranding them on a screen for an account they've left.
+                        scope.safeLaunch(NAV_TAG, "logging out") {
+                            try {
+                                authManager.logout()
+                            } catch (t: Throwable) {
+                                android.util.Log.e(NAV_TAG, "Clearing the session failed", t)
+                                
+                                    CrashReporter.recordNonFatal(NAV_TAG, "logging out", t)
+                            }
+                            runGuarded(NAV_TAG, "returning to the login screen") {
+                                activity.startActivity(
+                                    Intent(activity, LoginActivity::class.java).addFlags(
+                                        Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                    )
                                 )
-                            )
-                            activity.finish()
+                                activity.finish()
+                            }
                         }
                     },
                 )
@@ -305,27 +386,43 @@ private fun ShellNavigation(
                     contact = contact,
                     activating = activating,
                     activationError = activationError,
-                    onBack = { navController.popBackStack() },
-                    onWhatsApp = { plan -> context.openWhatsApp(contact, plan) },
-                    onCall = { context.openDialer(contact) },
-                    onEmail = { plan -> context.openEmail(contact, plan) },
+                    onBack = goBack,
+                    onWhatsApp = safeAction1(NAV_TAG, "opening WhatsApp", onFailure) { plan: Tier ->
+                        context.openWhatsApp(contact, plan)
+                    },
+                    onCall = safeAction(NAV_TAG, "opening the dialler", onFailure) { context.openDialer(contact) },
+                    onEmail = safeAction1(NAV_TAG, "opening email", onFailure) { plan: Tier ->
+                        context.openEmail(contact, plan)
+                    },
                     onActivate = { code ->
                         activationError = null
                         activating = true
-                        scope.launch {
-                            when (val result = licenseManager.activate(code)) {
-                                is LicenseManager.Result.Success -> {
-                                    viewModel.setEntitlement(result.entitlement)
-                                    activating = false
-                                    snackbarHost.showSnackbar(
-                                        "${result.entitlement.tier.displayName} activated. Enjoy!"
-                                    )
-                                    navController.popBackStack()
+                        // Guarded end to end: a licence check hits the network and the
+                        // keystore, either of which can throw. Leaving the spinner up forever
+                        // — or killing the app — are both worse than showing the error.
+                        scope.safeLaunch(NAV_TAG, "activating a licence") {
+                            try {
+                                when (val result = licenseManager.activate(code)) {
+                                    is LicenseManager.Result.Success -> {
+                                        viewModel.setEntitlement(result.entitlement)
+                                        activating = false
+                                        snackbarHost.showSnackbar(
+                                            "${result.entitlement.tier.displayName} activated. Enjoy!"
+                                        )
+                                        navController.popBackStack()
+                                    }
+                                    is LicenseManager.Result.Failure -> {
+                                        activating = false
+                                        activationError = result.message
+                                    }
                                 }
-                                is LicenseManager.Result.Failure -> {
-                                    activating = false
-                                    activationError = result.message
-                                }
+                            } catch (t: Throwable) {
+                                android.util.Log.e(NAV_TAG, "Activating a licence failed", t)
+                                
+                                    CrashReporter.recordNonFatal(NAV_TAG, "activating a licence", t)
+                                activating = false
+                                activationError =
+                                    "Couldn't check that code. Check your connection and try again."
                             }
                         }
                     },
@@ -402,4 +499,3 @@ private fun android.content.Context.openSupport(contact: SupportContact, plan: T
         ).show()
     }
 }
-

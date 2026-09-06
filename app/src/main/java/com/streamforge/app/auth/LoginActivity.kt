@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.streamforge.app.ui.shell.ShellActivity
 import com.streamforge.app.databinding.ActivityLoginBinding
+import com.streamforge.app.util.CrashDialog
 import com.streamforge.app.util.safeLaunch
 
 /**
@@ -24,7 +25,16 @@ class LoginActivity : AppCompatActivity() {
         setContentView(binding.root)
         
         authManager = AuthManager(this)
-        
+
+        // Show the previous session's crash report HERE, not only in the shell.
+        //
+        // When the process dies, Android relaunches the app at its launcher activity — this
+        // one. Reporting only from ShellActivity meant the user had to get all the way back
+        // through login before the report surfaced, and a crash that happened before that
+        // point was never shown at all. This is the screen a crash actually lands on, so it
+        // is the screen that has to say so.
+        CrashDialog.showIfCrashed(this)
+
         // Check if already authenticated
         if (authManager.isAuthenticated()) {
             validateAndProceed()

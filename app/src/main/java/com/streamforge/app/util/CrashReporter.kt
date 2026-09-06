@@ -26,17 +26,34 @@ object CrashReporter {
 
     private const val TAG = "CrashReporter"
     private const val FILE_NAME = "last_crash.txt"
+    private const val NON_FATAL_FILE_NAME = "non_fatals.txt"
 
     /** Keep the file small — a stack trace is a few KB; this bounds a pathological loop. */
     private const val MAX_BYTES = 256 * 1024
 
+    /**
+     * The non-fatal log is append-only and could otherwise grow without bound, so it is
+     * rewritten from the tail once it passes this. Smaller than [MAX_BYTES] because these are
+     * failures the app already survived — recent ones are what matter.
+     */
+    private const val MAX_NON_FATAL_BYTES = 128 * 1024
+
     @Volatile
     private var installed = false
+
+    /**
+     * Held so [recordNonFatal] can be called from anywhere — a click handler deep in a
+     * composable has no Context to hand, and requiring one would mean threading it through
+     * every guarded call site. This is the *application* context, so it leaks nothing.
+     */
+    @Volatile
+    private var appContext: Context? = null
 
     fun install(context: Context) {
         if (installed) return
         installed = true
         val appContext = context.applicationContext
+        this.appContext = appContext
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
@@ -72,6 +89,52 @@ object CrashReporter {
             if (file.exists() && file.length() > 0) file.readText() else null
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to read crash report", t)
+            null
+        }
+    }
+
+    /**
+     * Record a throwable the app caught and survived.
+     *
+     * The guards added around click handlers and background work stop a failure from killing
+     * the process, but a silently swallowed exception is its own kind of bug — the button
+     * just does nothing and there is no way to find out why. Everything the app swallows
+     * lands here, so a "that option doesn't work" report can still be traced to a stack
+     * trace rather than guessed at.
+     *
+     * Deliberately best-effort and never throws: this is called from inside catch blocks
+     * whose entire purpose is to stop exceptions propagating.
+     */
+    fun recordNonFatal(tag: String, what: String, throwable: Throwable) {
+        val context = appContext ?: return
+        try {
+            val stack = StringWriter().also { throwable.printStackTrace(PrintWriter(it)) }.toString()
+            val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+            val entry = buildString {
+                appendLine("--- $stamp [$tag] $what")
+                append(stack)
+                appendLine()
+            }
+            val file = File(context.filesDir, NON_FATAL_FILE_NAME)
+            // Trim from the front when the log gets long: the newest failures are the ones
+            // being investigated, and an unbounded append-only file on a phone is a bug.
+            if (file.exists() && file.length() > MAX_NON_FATAL_BYTES) {
+                val kept = file.readText().takeLast(MAX_NON_FATAL_BYTES / 2)
+                file.writeText(kept.substringAfter("--- ", kept))
+            }
+            file.appendText(entry)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to record non-fatal", t)
+        }
+    }
+
+    /** Everything the app has caught and survived since this was last cleared. */
+    fun readNonFatals(context: Context): String? {
+        val file = File(context.applicationContext.filesDir, NON_FATAL_FILE_NAME)
+        return try {
+            if (file.exists() && file.length() > 0) file.readText() else null
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to read non-fatals", t)
             null
         }
     }

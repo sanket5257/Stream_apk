@@ -1,7 +1,7 @@
 {
-  "versionCode": 3,
-  "versionName": "0.2.1",
-  "apkUrl": "https://github.com/sanket5257/Stream_apk/releases/download/v0.2.1/streamforge.apk",
-  "notes": "Stability release — fixes the crashes that dropped you back to the home screen.\n\n• Fixed crashes when opening the overlay manager with photo or video overlays\n• Fixed the app dying after returning from the gallery picker while live\n• Fixed the crash when flipping the camera\n• The stream no longer stops when a dialog or the notification shade covers the screen\n• Fixed the black preview after switching back to the app\n• Quality settings now load correctly instead of falling back to defaults\n• Lower memory use for image and web overlays\n• If the app does close unexpectedly, it now tells you why on the next launch",
+  "versionCode": 4,
+  "versionName": "1.0.0",
+  "apkUrl": "https://github.com/sanket5257/Stream_apk/releases/download/v1.0.0/streamforge.apk",
+  "notes": "StreamForge 1.0 — broadcast graphics, multistream and a rebuilt app.\n\n• Graphics packs: cricket, kabaddi and football scoreboards, lower third, headline bar, wedding title and logo bug\n• Live scoring on the camera screen — tap +4 or Wicket without leaving the stream\n• Scenes: switch between pre-show, live, break and outro instantly, even while live\n• Multistream: publish to YouTube, Facebook and a custom RTMP server at the same time\n• Rebuilt interface throughout, with light and dark themes\n• Plans and licence activation are now built into the app",
   "mandatory": false
 }

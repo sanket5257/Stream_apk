@@ -17,10 +17,14 @@ import com.streamforge.app.storage.DestinationStore
 import com.streamforge.app.storage.StreamConfig
 import com.streamforge.app.storage.StreamPrefs
 import com.streamforge.app.stream.Destination
+import com.streamforge.app.util.CrashReporter
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
@@ -31,6 +35,16 @@ import java.util.UUID
  * another shows — adding a scoreboard on the Graphics screen has to be visible to the studio
  * and the paywall check straight away. Splitting that into per-screen models would mean
  * synchronising them, which is strictly more work for no benefit at this size.
+ *
+ * ## Every write goes through [work]
+ *
+ * Nothing in here calls `viewModelScope.launch` directly, and that is the point. A bare
+ * `launch` has no exception handler: anything thrown inside it reaches the thread's uncaught
+ * handler and ends the process. Every one of these operations touches storage that can fail
+ * for reasons outside the app's control — a corrupt DataStore file, a keystore the device
+ * won't unlock, a full disk — so a bare launch here meant that tapping "add a scene" or
+ * toggling a destination could drop the user out to the launcher. [work] makes that
+ * structurally impossible, and puts the storage call on a background thread while it's there.
  */
 class ShellViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -68,8 +82,39 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
         refresh()
     }
 
-    fun refresh() {
+    /**
+     * Run one storage operation off the main thread, surviving any failure.
+     *
+     * [failureMessage] is what the user is told if it throws. Pass null for work they did not
+     * ask for and need not know about (a background refresh); pass a sentence for anything
+     * they initiated, so a save that did not happen never looks like it did.
+     */
+    private fun work(
+        what: String,
+        failureMessage: String? = null,
+        block: suspend () -> Unit,
+    ) {
         viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { block() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.e(TAG, "$what failed", t)
+                CrashReporter.recordNonFatal(TAG, what, t)
+                failureMessage?.let { post(it) }
+            }
+        }
+    }
+
+    /**
+     * Reload everything from storage.
+     *
+     * Each read is separately guarded so one unreadable store does not blank the other five —
+     * a corrupt overlay file should not cost the user their destinations too.
+     */
+    fun refresh() {
+        work("refreshing shell state") {
             runCatching { _destinations.value = destinationStore.load() }
                 .onFailure { Log.e(TAG, "Loading destinations failed", it) }
             runCatching { _overlays.value = overlayStore.loadOverlays() }
@@ -94,7 +139,7 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
     // -----------------------------------------------------------------------------------
 
     fun saveDestination(destination: Destination) {
-        viewModelScope.launch {
+        work("saving a destination", "Couldn't save that destination.") {
             val ok = destinationStore.upsert(destination)
             if (!ok) {
                 // The keystore is unusable on this device. Say so rather than showing a saved
@@ -106,7 +151,7 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeDestination(id: String) {
-        viewModelScope.launch {
+        work("removing a destination", "Couldn't remove that destination.") {
             destinationStore.remove(id)
             _destinations.value = destinationStore.load()
         }
@@ -154,29 +199,27 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
             post("${pack.name} needs ${if (pack.tier.name == "STUDIO") "Studio" else "Pro"}.")
             return
         }
-        // OverlayRenderer's base overlay width is 20% of the frame at scale 1.0.
-        val scale = (pack.defaultWidth / 0.2f).coerceIn(0.5f, 5f)
-        val heightFraction = pack.defaultWidth / pack.canvas.aspect
-        val (x, y) = pack.anchor.centerFor(pack.defaultWidth, heightFraction)
+        work("adding a pack", "Couldn't add that graphic.") {
+            // Geometry is computed inside the guard: a malformed pack definition (a zero
+            // canvas aspect, a missing default) would otherwise throw straight out of the
+            // click handler. OverlayRenderer's base overlay width is 20% of the frame at
+            // scale 1.0.
+            val scale = (pack.defaultWidth / 0.2f).coerceIn(0.5f, 5f)
+            val heightFraction = pack.defaultWidth / pack.canvas.aspect
+            val (x, y) = pack.anchor.centerFor(pack.defaultWidth, heightFraction)
 
-        val overlay = OverlayItem.Pack(
-            id = UUID.randomUUID().toString(),
-            packId = pack.id,
-            values = pack.defaultValues(),
-            x = x,
-            y = y,
-            scale = scale,
-            heightScale = scale,
-            zIndex = (_overlays.value.maxOfOrNull { it.zIndex } ?: 0) + 1,
-        )
-        viewModelScope.launch {
-            runCatching {
-                overlayStore.addOverlay(overlay)
-                _overlays.value = overlayStore.loadOverlays()
-            }.onFailure {
-                Log.e(TAG, "Adding pack failed", it)
-                post("Couldn't add that graphic.")
-            }
+            val overlay = OverlayItem.Pack(
+                id = UUID.randomUUID().toString(),
+                packId = pack.id,
+                values = pack.defaultValues(),
+                x = x,
+                y = y,
+                scale = scale,
+                heightScale = scale,
+                zIndex = (_overlays.value.maxOfOrNull { it.zIndex } ?: 0) + 1,
+            )
+            overlayStore.addOverlay(overlay)
+            _overlays.value = overlayStore.loadOverlays()
         }
     }
 
@@ -184,28 +227,20 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
         val existing = _overlays.value.firstOrNull { it.id == overlayId } as? OverlayItem.Pack ?: return
         val updated = existing.copy(values = values)
         _overlays.value = _overlays.value.map { if (it.id == overlayId) updated else it }
-        viewModelScope.launch {
-            runCatching { overlayStore.updateOverlay(updated) }
-                .onFailure { Log.e(TAG, "Saving pack values failed", it) }
-        }
+        work("saving pack values") { overlayStore.updateOverlay(updated) }
     }
 
     fun updatePackTheme(overlayId: String, themeKey: String) {
         val existing = _overlays.value.firstOrNull { it.id == overlayId } as? OverlayItem.Pack ?: return
         val updated = existing.copy(themeKey = themeKey)
         _overlays.value = _overlays.value.map { if (it.id == overlayId) updated else it }
-        viewModelScope.launch {
-            runCatching { overlayStore.updateOverlay(updated) }
-                .onFailure { Log.e(TAG, "Saving pack theme failed", it) }
-        }
+        work("saving pack theme") { overlayStore.updateOverlay(updated) }
     }
 
     fun removeOverlay(id: String) {
-        viewModelScope.launch {
-            runCatching {
-                overlayStore.removeOverlay(id)
-                _overlays.value = overlayStore.loadOverlays()
-            }.onFailure { Log.e(TAG, "Removing overlay failed", it) }
+        work("removing an overlay", "Couldn't remove that graphic.") {
+            overlayStore.removeOverlay(id)
+            _overlays.value = overlayStore.loadOverlays()
         }
     }
 
@@ -218,23 +253,22 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
             post("More than one scene needs Pro.")
             return
         }
-        val scene = Scene(name = name, order = _scenes.value.size)
-        viewModelScope.launch {
-            sceneStore.upsert(scene)
+        work("adding a scene", "Couldn't add that scene.") {
+            sceneStore.upsert(Scene(name = name, order = _scenes.value.size))
             _scenes.value = sceneStore.load()
         }
     }
 
     fun renameScene(id: String, name: String) {
         val existing = _scenes.value.firstOrNull { it.id == id } ?: return
-        viewModelScope.launch {
+        work("renaming a scene", "Couldn't rename that scene.") {
             sceneStore.upsert(existing.copy(name = name))
             _scenes.value = sceneStore.load()
         }
     }
 
     fun removeScene(id: String) {
-        viewModelScope.launch {
+        work("removing a scene", "Couldn't remove that scene.") {
             sceneStore.remove(id)
             _scenes.value = sceneStore.load()
         }
@@ -245,7 +279,7 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
         val existing = _scenes.value.firstOrNull { it.id == sceneId } ?: return
         val updated = existing.copy(visibility = existing.visibility + (overlayId to visible))
         _scenes.value = _scenes.value.map { if (it.id == sceneId) updated else it }
-        viewModelScope.launch { sceneStore.upsert(updated) }
+        work("saving scene visibility") { sceneStore.upsert(updated) }
     }
 
     // -----------------------------------------------------------------------------------
@@ -262,13 +296,7 @@ class ShellViewModel(application: Application) : AndroidViewModel(application) {
             config.copy(width = 1280, height = 720)
         } else config
         _config.value = capped
-        viewModelScope.launch {
-            runCatching { streamPrefs.save(capped) }
-                .onFailure {
-                    Log.e(TAG, "Saving stream config failed", it)
-                    post("Couldn't save those settings.")
-                }
-        }
+        work("saving stream config", "Couldn't save those settings.") { streamPrefs.save(capped) }
     }
 
     fun setEntitlement(entitlement: Entitlement) {

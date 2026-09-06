@@ -9,6 +9,7 @@ import com.streamforge.app.auth.AuthManager
 import com.streamforge.app.auth.AuthResult
 import com.streamforge.app.ui.shell.ShellActivity
 import com.streamforge.app.util.CrashReporter
+import com.streamforge.app.util.MainLooperGuard
 import com.streamforge.app.util.safeLaunch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -24,6 +25,10 @@ class StreamForgeApp : Application() {
         // First thing, before anything can throw: record uncaught crashes so a field failure
         // leaves evidence instead of just bouncing the user to the launcher.
         CrashReporter.install(this)
+
+        // Then stop the main thread from dying on an exception at all. This has to come after
+        // CrashReporter so anything the guard does decide to rethrow is still recorded.
+        MainLooperGuard.install()
 
         // Apply the user's saved theme (Profile -> Theme) before any UI shows.
         val mode = try {

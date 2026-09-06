@@ -22,6 +22,16 @@ val localProps = Properties().apply {
     if (localPropsFile.exists()) localPropsFile.inputStream().use { load(it) }
 }
 
+/**
+ * Where installed apps look for new releases.
+ *
+ * This resolves to `version.json` at the repo root on `main`, which is the file every shipped
+ * build polls. It is committed here rather than left to local.properties because an APK built
+ * without it can never be updated — see the comment on UPDATE_MANIFEST_URL below.
+ */
+val DEFAULT_UPDATE_MANIFEST_URL =
+    "https://raw.githubusercontent.com/sanket5257/Stream_apk/main/version.json"
+
 android {
     namespace = "com.streamforge.app"
     compileSdk = 34
@@ -30,10 +40,19 @@ android {
         applicationId = "com.streamforge.app"
         minSdk = 24
         targetSdk = 34
-        // versionCode is the ONLY value Android compares when installing an update — it must
-        // increase every release or the install is rejected as a downgrade. See RELEASING.md.
+        // VERSIONING — read before changing either number.
+        //
+        // versionName is what people see. This release is the product's real 1.0: the
+        // graphics packs, multistream, scenes and licensing land together, so it is named
+        // accordingly.
+        //
+        // versionCode is the ONLY value Android compares, and it can NEVER go down. The
+        // 0.2.1 build in the field is versionCode 3, so this one must be 4 — resetting it to
+        // 1 to match the "1.0.0" name would make every existing install refuse the update
+        // forever (Android treats a lower code as a downgrade and rejects it outright).
+        // The two numbers are independent on purpose; let the name restart, not the code.
         versionCode = 4
-        versionName = "0.3.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -49,12 +68,20 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
 
-        // Sideload update channel: the JSON manifest the app polls for new releases (see
-        // RELEASING.md). Left blank the updater simply stays quiet, so builds without it
-        // configured behave exactly as before.
+        // Update channel: the JSON manifest the app polls for new releases (see RELEASING.md).
+        //
+        // This has a DEFAULT rather than being blank, and that matters. Distribution is
+        // direct-APK only: a device gets the installer once, and every release after that has
+        // to arrive through this URL. A build shipped with a blank manifest URL has no update
+        // channel at all — those installs are stranded on that version permanently, with no
+        // way to reach them short of asking each user to sideload again. Defaulting it means
+        // you have to go out of your way to ship an un-updatable build, instead of getting one
+        // by forgetting a line in local.properties.
+        //
+        // Override in local.properties if you host the manifest somewhere else.
         val updateManifestUrl = localProps.getProperty("UPDATE_MANIFEST_URL")
             ?: System.getenv("UPDATE_MANIFEST_URL")
-            ?: ""
+            ?: DEFAULT_UPDATE_MANIFEST_URL
         buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"")
 
         // How customers reach you to buy a licence. There is no payment gateway in the app:
@@ -135,6 +162,58 @@ android {
         outputs.all {
             (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl)
                 .outputFileName = "streamforge.apk"
+        }
+    }
+}
+
+/**
+ * Release-build safety net.
+ *
+ * Distribution is direct-APK: a user installs once by hand, and every release after that must
+ * arrive through the in-app updater. Two mistakes make a release permanently unreachable, and
+ * both are silent at build time:
+ *
+ *  - **No update channel.** The APK never polls for anything. Those installs are stranded.
+ *  - **Wrong / missing signing key.** Android refuses an update signed with a different key,
+ *    so users would have to uninstall (losing their settings and licence binding) to move on.
+ *
+ * Both are cheap to check and catastrophic to discover after the APK is in customers' hands,
+ * so the build stops rather than producing an unshippable artifact.
+ *
+ * Values are read into locals here so the task action captures plain booleans — required for
+ * Gradle's configuration cache, which this project has enabled.
+ */
+val hasUpdateChannel = (
+    localProps.getProperty("UPDATE_MANIFEST_URL")
+        ?: System.getenv("UPDATE_MANIFEST_URL")
+        ?: DEFAULT_UPDATE_MANIFEST_URL
+    ).isNotBlank()
+val hasSigningKey = keystorePropsFile.exists()
+
+tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+    // Read the flags into locals HERE, at configuration time. Referencing the script-level
+    // vals directly from inside doFirst would make the task action capture the build script
+    // object itself, which Gradle's configuration cache cannot serialize.
+    val updateChannelConfigured = hasUpdateChannel
+    val signingKeyPresent = hasSigningKey
+    doFirst {
+        if (!updateChannelConfigured) {
+            throw GradleException(
+                "Refusing to build a release with no UPDATE_MANIFEST_URL.\n" +
+                    "Every device that installs this APK would be stuck on this version " +
+                    "forever — the in-app updater would have nothing to poll.\n" +
+                    "Set UPDATE_MANIFEST_URL in local.properties, or unset it to use the " +
+                    "default. See RELEASING.md."
+            )
+        }
+        if (!signingKeyPresent) {
+            throw GradleException(
+                "Refusing to build an unsigned release.\n" +
+                    "An APK signed with a different key (or none) cannot update an existing " +
+                    "install — users would have to uninstall first, losing their settings and " +
+                    "their licence binding.\n" +
+                    "Create ~/.gradle/streamforge-keystore.properties. See RELEASING.md."
+            )
         }
     }
 }
