@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.streamforge.app.ui.shell.ShellActivity
 import com.streamforge.app.databinding.ActivityLoginBinding
 import com.streamforge.app.util.CrashDialog
+import com.streamforge.app.util.CrashReporter
 import com.streamforge.app.util.safeLaunch
 
 /**
@@ -35,13 +36,18 @@ class LoginActivity : AppCompatActivity() {
         // is the screen that has to say so.
         CrashDialog.showIfCrashed(this)
 
-        // Check if already authenticated
+        // Wire the form up FIRST, unconditionally.
+        //
+        // This used to return early when a session existed, so the form's click listeners were
+        // never attached on that path. That was invisible while validation always succeeded or
+        // hung — but the moment a failed validation drops the user back to this form, they get
+        // a Login button that does nothing at all. The form is always visible in this layout,
+        // so it must always work.
+        setupUI()
+
         if (authManager.isAuthenticated()) {
             validateAndProceed()
-            return
         }
-        
-        setupUI()
     }
     
     private fun setupUI() {
@@ -139,27 +145,16 @@ class LoginActivity : AppCompatActivity() {
         
         if (!isValid) return
         
-        setLoading(true)
-        
-        safeLaunch(TAG) {
-            when (val result = authManager.signUp(email, username, password, inviteCode)) {
-                is AuthResult.Success -> {
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "Account created successfully!",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    navigateToMain()
-                }
-                is AuthResult.Error -> {
-                    setLoading(false)
-                    Toast.makeText(
-                        this@LoginActivity,
-                        result.message,
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
+        runAuth(
+            what = "signing up",
+            work = { authManager.signUp(email, username, password, inviteCode) },
+        ) {
+            Toast.makeText(
+                this@LoginActivity,
+                "Account created successfully!",
+                Toast.LENGTH_SHORT
+            ).show()
+            navigateToMain()
         }
     }
     
@@ -180,51 +175,73 @@ class LoginActivity : AppCompatActivity() {
         binding.tilUsername.error = null
         binding.tilPassword.error = null
         
-        setLoading(true)
-        
-        safeLaunch(TAG) {
-            when (val result = authManager.authenticate(username, password)) {
-                is AuthResult.Success -> {
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "Login successful!",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    navigateToMain()
-                }
-                is AuthResult.Error -> {
-                    setLoading(false)
-                    Toast.makeText(
-                        this@LoginActivity,
-                        result.message,
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
+        runAuth(
+            what = "logging in",
+            work = { authManager.authenticate(username, password) },
+        ) {
+            Toast.makeText(
+                this@LoginActivity,
+                "Login successful!",
+                Toast.LENGTH_SHORT
+            ).show()
+            navigateToMain()
         }
     }
     
     private fun validateAndProceed() {
+        // Runs automatically on launch for a signed-in user, which is why a hang here was so
+        // bad: it left the app on a spinner before it had shown anything at all.
+        runAuth(
+            what = "validating the saved session",
+            work = { authManager.validateAuth() },
+            errorPrefix = "Session expired: ",
+        ) { navigateToMain() }
+    }
+
+    /**
+     * Run one auth call with the loading overlay up, guaranteeing the overlay comes back down.
+     *
+     * Each call site used to clear the overlay only on the two [AuthResult] branches. Anything
+     * that *threw* instead — an unreachable backend, an unreadable keystore, a TLS failure on
+     * a captive-portal Wi-Fi — never reached either branch, and `safeLaunch` swallowed the
+     * throw rather than crashing. The result was the app sitting on "loading" forever with
+     * every field disabled and no way out but force-quitting it.
+     *
+     * A throw is now converted into an ordinary error result, so the user always gets the
+     * overlay back, a reason, and a form they can retry from.
+     */
+    private fun runAuth(
+        what: String,
+        work: suspend () -> AuthResult,
+        errorPrefix: String = "",
+        onSuccess: () -> Unit,
+    ) {
         setLoading(true)
-        
-        safeLaunch(TAG) {
-            when (val result = authManager.validateAuth()) {
-                is AuthResult.Success -> {
-                    navigateToMain()
-                }
-                is AuthResult.Error -> {
-                    setLoading(false)
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "Session expired: ${result.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    // Show login form - it's always visible in new layout
-                }
+
+        safeLaunch(TAG, what) {
+            val result = try {
+                work()
+            } catch (t: Throwable) {
+                android.util.Log.e(TAG, "$what failed", t)
+                CrashReporter.recordNonFatal(TAG, what, t)
+                AuthResult.Error("Couldn't reach the server. Check your connection and try again.")
+            }
+
+            // Cleared before either branch, so no path can leave the spinner up. Harmless on
+            // the success path — navigating away finishes this activity anyway.
+            setLoading(false)
+
+            when (result) {
+                is AuthResult.Success -> onSuccess()
+                is AuthResult.Error -> Toast.makeText(
+                    this@LoginActivity,
+                    "$errorPrefix${result.message}",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
-    
+
     private companion object {
         const val TAG = "LoginActivity"
     }

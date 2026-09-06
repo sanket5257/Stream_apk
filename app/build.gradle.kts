@@ -42,17 +42,18 @@ android {
         targetSdk = 34
         // VERSIONING — read before changing either number.
         //
-        // versionName is what people see. This release is the product's real 1.0: the
-        // graphics packs, multistream, scenes and licensing land together, so it is named
-        // accordingly.
+        // versionName is what people see. 1.0.1 is the crash-hardening release: the click
+        // handlers, view-model writes and studio controls that could take the process down
+        // are all guarded, so an option that fails now reports itself instead of dropping
+        // the user back at the launcher.
         //
-        // versionCode is the ONLY value Android compares, and it can NEVER go down. The
-        // 0.2.1 build in the field is versionCode 3, so this one must be 4 — resetting it to
-        // 1 to match the "1.0.0" name would make every existing install refuse the update
-        // forever (Android treats a lower code as a downgrade and rejects it outright).
-        // The two numbers are independent on purpose; let the name restart, not the code.
-        versionCode = 4
-        versionName = "1.0.0"
+        // versionCode is the ONLY value Android compares, and it can NEVER go down OR repeat.
+        // 1.0.0 shipped as versionCode 4, so this must be 5. Tagging a GitHub release
+        // "v1.0.1" does NOT change these numbers — they live here, and an APK built without
+        // bumping them is still 1.0.0 as far as every phone is concerned, which is exactly
+        // how a "released" update reaches nobody.
+        versionCode = 5
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
