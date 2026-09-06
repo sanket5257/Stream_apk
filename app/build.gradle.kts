@@ -48,12 +48,16 @@ android {
         // the user back at the launcher.
         //
         // versionCode is the ONLY value Android compares, and it can NEVER go down OR repeat.
-        // 1.0.0 shipped as versionCode 4, so this must be 5. Tagging a GitHub release
-        // "v1.0.1" does NOT change these numbers — they live here, and an APK built without
-        // bumping them is still 1.0.0 as far as every phone is concerned, which is exactly
-        // how a "released" update reaches nobody.
-        versionCode = 5
-        versionName = "1.0.1"
+        // 1.0.0 shipped as 4 and 1.0.1 as 5, so this must be 6. Tagging a GitHub release
+        // "v1.0.2" does NOT change these numbers — they live here, and an APK built without
+        // bumping them carries the old version as far as every phone is concerned, which is
+        // exactly how a "released" update reaches nobody.
+        //
+        // A device only offers an update when the manifest's versionCode is strictly GREATER
+        // than the installed one. Shipping the same code twice means no one is ever prompted,
+        // however many GitHub releases exist.
+        versionCode = 6
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
