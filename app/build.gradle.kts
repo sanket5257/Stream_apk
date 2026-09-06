@@ -42,23 +42,28 @@ android {
         targetSdk = 34
         // VERSIONING — read before changing either number.
         //
-        // versionName is what people see. 1.0.3 is the graphics release: it fixes the bad
+        // versionName is what people see. 1.0.4 is the graphics release: it fixes the bad
         // regex that stopped PackRasterizer loading at all — so nothing drew, anywhere — and
         // adds the Diagnostics screen that made the failure findable on a phone with no
         // USB debugging. A graphic added on the Graphics screen also now reaches a studio
         // that was already open, and one that fails to draw says why instead of an empty box.
         //
+        // 1.0.3 (code 7) was built and hand-installed for testing but never published, so it
+        // is burnt: a device already carrying code 7 would refuse an equal code. This is why
+        // the public release is 1.0.4 / code 8 — a test build spends a code just as a shipped
+        // one does.
+        //
         // versionCode is the ONLY value Android compares, and it can NEVER go down OR repeat.
-        // 1.0.0 shipped as 4, 1.0.1 as 5 and 1.0.2 as 6, so this must be 7. Tagging a GitHub release
-        // "v1.0.3" does NOT change these numbers — they live here, and an APK built without
+        // 1.0.0 shipped as 4, 1.0.1 as 5, 1.0.2 as 6 and 1.0.3 as 7, so this must be 8.
+        // Tagging a GitHub release "v1.0.4" does NOT change these numbers — they live here, and an APK built without
         // bumping them carries the old version as far as every phone is concerned, which is
         // exactly how a "released" update reaches nobody.
         //
         // A device only offers an update when the manifest's versionCode is strictly GREATER
         // than the installed one. Shipping the same code twice means no one is ever prompted,
         // however many GitHub releases exist.
-        versionCode = 7
-        versionName = "1.0.3"
+        versionCode = 8
+        versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
