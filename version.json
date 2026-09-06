@@ -1,7 +1,7 @@
 {
-  "versionCode": 5,
-  "versionName": "1.0.1",
-  "apkUrl": "https://github.com/sanket5257/Stream_apk/releases/download/v1.0.1/streamforge.apk",
-  "notes": "Stability release — the app no longer closes when you tap an option.\n\n• Fixed the crash that dropped you out to the phone's home screen when adding or renaming a scene, saving or switching a destination, activating a licence, or logging out\n• Every button in the app and the studio is now guarded, so a failure shows a message instead of closing the app\n• Go Live no longer closes the app if you tap it before the camera has finished starting\n• If something does go wrong, the app now shows you what happened on the next launch",
+  "versionCode": 6,
+  "versionName": "1.0.2",
+  "apkUrl": "https://github.com/sanket5257/Stream_apk/releases/download/v1.0.2/streamforge.apk",
+  "notes": "Stability release — the app no longer closes when you tap an option.\n\n• Fixed the crash that dropped you out to the phone's home screen when tapping options in Graphics or Scenes\n• Fixed the same crash when saving or switching a destination, activating a licence, or logging out\n• Fixed the login screen getting stuck on a loading spinner when the server couldn't be reached\n• Go Live no longer closes the app if you tap it before the camera has finished starting\n• Every button in the app and the studio is now guarded, so a failure shows a message instead of closing the app\n• If something does go wrong, the app now tells you what happened on the next launch",
   "mandatory": false
 }
