@@ -5,7 +5,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.streamforge.app.HomeActivity
+import com.streamforge.app.ui.shell.ShellActivity
 import com.streamforge.app.databinding.ActivityLoginBinding
 import com.streamforge.app.util.safeLaunch
 
@@ -220,7 +220,7 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun navigateToMain() {
-        startActivity(Intent(this, HomeActivity::class.java))
+        startActivity(Intent(this, ShellActivity::class.java))
         finish()
     }
     

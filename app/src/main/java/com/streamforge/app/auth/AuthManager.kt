@@ -56,6 +56,12 @@ class AuthManager(private val context: Context) {
     }
 
     /**
+     * Stored user id. Needed by anything that has to identify this account to the backend —
+     * licence activation binds a code to a user id and a device id together.
+     */
+    fun userId(): String? = prefs.getString(PREF_USER_ID, null)
+
+    /**
      * Sign up new user with email, username, password, and invite code.
      * Invite-code validation, uniqueness checks, password hashing, and marking
      * the code used all happen atomically inside the app_signup function.

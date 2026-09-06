@@ -1,0 +1,28 @@
+{
+  "id": "logo_bug",
+  "name": "Logo Bug",
+  "category": "GENERAL",
+  "description": "Small corner badge with your logo and channel name. Free to use.",
+  "tier": "FREE",
+  "canvas": { "w": 460, "h": 120 },
+  "defaultWidth": 0.2,
+  "anchor": "TOP_RIGHT",
+
+  "fields": [
+    { "key": "logo", "label": "Logo", "type": "IMAGE", "default": "" },
+    { "key": "name", "label": "Channel name", "type": "TEXT", "default": "Your Channel", "maxLen": 22 },
+    { "key": "tag", "label": "Tagline", "type": "TEXT", "default": "", "maxLen": 26 }
+  ],
+
+  "actions": [],
+
+  "elements": [
+    { "kind": "RECT", "x": 0, "y": 0, "w": 460, "h": 120, "radius": 16, "fill": "SURFACE" },
+    { "kind": "IMAGE", "x": 20, "y": 20, "w": 80, "h": 80, "imageField": "logo", "showIf": "logo" },
+
+    { "kind": "TEXT", "x": 118, "y": 22, "w": 320, "h": 48, "size": 38, "weight": "BOLD",
+      "fill": "ON_SURFACE", "text": "{name}", "showIf": "name" },
+    { "kind": "TEXT", "x": 118, "y": 70, "w": 320, "h": 32, "size": 24,
+      "fill": "MUTED", "text": "{tag}", "caps": true, "tracking": 0.08, "showIf": "tag" }
+  ]
+}

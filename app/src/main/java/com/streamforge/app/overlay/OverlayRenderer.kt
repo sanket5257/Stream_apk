@@ -12,7 +12,10 @@ import com.pedro.encoder.input.gl.render.filters.BaseFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.BaseObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.GifObjectFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.ImageObjectFilterRender
-import com.pedro.library.rtmp.RtmpCamera2
+import com.pedro.library.base.Camera2Base
+import com.streamforge.app.packs.PackCatalog
+import com.streamforge.app.packs.PackRasterizer
+import com.streamforge.app.packs.PackTheme
 import com.streamforge.app.util.safeLaunch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +42,7 @@ import kotlin.math.roundToInt
  */
 class OverlayRenderer(
     private val context: Context,
-    private val rtmpCamera: RtmpCamera2,
+    private val rtmpCamera: Camera2Base,
     // Window-capable context (an Activity) used to host browser-overlay Presentations.
     // Defaults to [context] for callers that don't use browser overlays.
     private val uiContext: Context = context
@@ -433,6 +436,11 @@ class OverlayRenderer(
             if (item is OverlayItem.Text && filter is ImageObjectFilterRender) {
                 applyText(filter, item)
             }
+            // The live-control path: a "+4" tap arrives here as a Pack whose values changed,
+            // and applyPack re-rasterizes only when the content signature actually differs.
+            if (item is OverlayItem.Pack && filter is ImageObjectFilterRender) {
+                applyPack(filter, item)
+            }
             applyTransform(filter, item)
         } catch (t: Throwable) {
             // A GL/encoder call can throw if the pipeline is mid-teardown, and re-rasterizing
@@ -445,6 +453,7 @@ class OverlayRenderer(
     private fun addOverlay(item: OverlayItem) {
         when (item) {
             is OverlayItem.Text -> buildTextFilter(item)?.let { attachFilter(item, it) }
+            is OverlayItem.Pack -> buildPackFilter(item)?.let { attachFilter(item, it) }
             is OverlayItem.Video -> attachFilter(item, buildVideoFilter(item))
             is OverlayItem.Image -> loadAndAttachImage(item)
             is OverlayItem.Gif -> loadAndAttachGif(item)
@@ -543,7 +552,9 @@ class OverlayRenderer(
             // Timing-proof backstop: re-upload this overlay's texture shortly after the
             // attach lands, in case the first GL upload raced the render thread and came
             // out blank. Deduped via texturesHealed so it fires at most once per attach.
-            if (item is OverlayItem.Image || item is OverlayItem.Gif || item is OverlayItem.Text) {
+            if (item is OverlayItem.Image || item is OverlayItem.Gif ||
+                item is OverlayItem.Text || item is OverlayItem.Pack
+            ) {
                 mainHandler.postDelayed({
                     // Posted work runs outside every caller's guard, so it needs its own:
                     // healing re-rasterizes/re-uploads a texture and can throw or OOM.
@@ -637,6 +648,12 @@ class OverlayRenderer(
                 textSignatures.remove(item.id)
                 applyText(filter, item)
             }
+            item is OverlayItem.Pack && filter is ImageObjectFilterRender -> {
+                // Same story as text: the library owns and recycles what it uploads, so a
+                // heal means redrawing the graphic from its definition.
+                textSignatures.remove(item.id)
+                applyPack(filter, item)
+            }
             item is OverlayItem.Image && filter is ImageObjectFilterRender -> {
                 val bmp = bitmaps[item.id]
                 if (bmp != null && !bmp.isRecycled) {
@@ -695,11 +712,60 @@ class OverlayRenderer(
         contentAspect.clear()
         texturesHealed.clear()
         textSignatures.clear()
+        // Logos decoded for graphics packs are cached across renders; drop them with the rest.
+        PackRasterizer.clearCache()
         scope.cancel()
     }
 
+    // -------------------------------------------------------------------------------------
+    // Scene visibility
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * Overlays hidden by the CURRENT SCENE, as opposed to overlays the user has switched off
+     * in the overlay manager.
+     *
+     * The distinction matters. `OverlayItem.visible` means "this overlay is part of my show at
+     * all", and turning it off detaches the GL filter and frees its texture. A scene switch is
+     * a different question — "is this on screen right now?" — and happens live, repeatedly,
+     * mid-broadcast. Detaching and re-attaching filters for that would re-upload every texture
+     * on every switch, which is visible to viewers as a flicker.
+     *
+     * So scenes drive the filter's ALPHA instead. The filter stays attached with its texture
+     * resident, and switching is a single uniform change on the next rendered frame.
+     */
+    private val sceneHidden = mutableSetOf<String>()
+
+    /**
+     * Apply a scene's hidden set. Cheap and safe to call while live — no filter is added,
+     * removed, or re-uploaded.
+     */
+    fun applySceneVisibility(hiddenIds: Set<String>) {
+        sceneHidden.clear()
+        sceneHidden.addAll(hiddenIds)
+        filters.forEach { (id, filter) ->
+            if (filter !is BaseObjectFilterRender) return@forEach
+            try {
+                filter.setAlpha(if (id in sceneHidden) 0f else 1f)
+            } catch (t: Throwable) {
+                android.util.Log.e(TAG, "Setting scene alpha failed for $id", t)
+            }
+        }
+    }
+
+    /** Ids currently hidden by the active scene. */
+    fun sceneHiddenIds(): Set<String> = sceneHidden.toSet()
+
     private fun applyTransform(filter: BaseFilterRender, item: OverlayItem) {
         if (filter !is BaseObjectFilterRender) return
+        // Re-assert scene alpha on every transform: a filter attached AFTER a scene was
+        // applied (a late texture load, a watchdog rebuild) would otherwise pop into view at
+        // full opacity despite the scene saying it should be hidden.
+        try {
+            filter.setAlpha(if (item.id in sceneHidden) 0f else 1f)
+        } catch (t: Throwable) {
+            android.util.Log.e(TAG, "Setting alpha failed for ${item.id}", t)
+        }
         // Browser/URL overlays are a full-canvas layer — always edge-to-edge. Its page
         // content is fit to the full frame in BrowserOverlaySource, so the quad is just 100%.
         if (item is OverlayItem.Browser) {
@@ -816,6 +882,85 @@ class OverlayRenderer(
 
     private fun textSignature(item: OverlayItem.Text, targetPx: Float): String =
         "${item.text}|${item.fontKey}|${item.colorArgb}|${targetPx.toInt()}"
+
+    // -------------------------------------------------------------------------------------
+    // Graphics Packs
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * Pack definitions, loaded once from assets. Resolved lazily rather than in the
+     * constructor: OverlayRenderer is built on the main thread while the camera comes up, and
+     * reading + parsing the pack JSON there would add latency to every entry into the studio
+     * for users who have no packs at all.
+     */
+    private val packCatalog: PackCatalog by lazy { PackCatalog.loadBlocking(context) }
+
+    /**
+     * Fresh filter for a pack overlay. Mirrors [buildTextFilter]: the pack rasterizes to a
+     * single bitmap which is then an ordinary textured quad, so everything downstream —
+     * transforms, aspect correction, texture healing — is the code that already exists.
+     */
+    private fun buildPackFilter(item: OverlayItem.Pack): ImageObjectFilterRender? {
+        val filter = ImageObjectFilterRender()
+        // Fresh filter instance has no texture, so force a rasterize even if the content
+        // signature is unchanged from a previous attach.
+        textSignatures.remove(item.id)
+        return if (applyPack(filter, item)) filter else null
+    }
+
+    /**
+     * Rasterize a pack and upload it, recording its aspect so the box isn't stretched.
+     * No-ops when the pack, its values, its theme and its target size are all unchanged —
+     * this runs on every drag frame and every verify sweep, as well as every live-control tap.
+     * Returns true if the filter has a valid texture afterwards.
+     */
+    private fun applyPack(filter: ImageObjectFilterRender, item: OverlayItem.Pack): Boolean {
+        val definition = packCatalog.byId(item.packId) ?: run {
+            android.util.Log.w(TAG, "No pack definition for ${item.packId}")
+            return false
+        }
+
+        val target = packTargetPx(item)
+        val signature = packSignature(item, target)
+        if (textSignatures[item.id] == signature) return true
+
+        // Declared defaults first, so a field the user never touched still draws.
+        val values = definition.defaultValues() + item.values
+
+        val rendered = PackRasterizer.render(
+            context = context,
+            pack = definition,
+            values = values,
+            theme = PackTheme.byKey(item.themeKey),
+            targetWidthPx = target,
+        ) ?: return false
+
+        contentAspect[item.id] = rendered.aspect
+        textSignatures[item.id] = signature
+        // Handed over, not cached: the library's TextureLoader recycles whatever it uploads.
+        filter.setImage(rendered.bitmap)
+        return true
+    }
+
+    private fun packSignature(item: OverlayItem.Pack, targetPx: Int): String =
+        buildString {
+            append(item.packId).append('|').append(item.themeKey).append('|').append(targetPx)
+            // Sorted so an equal map with different insertion order doesn't force a redraw.
+            item.values.entries.sortedBy { it.key }.forEach { (k, v) ->
+                append('|').append(k).append('=').append(v)
+            }
+        }
+
+    /**
+     * Resolution to rasterize a pack at, in output pixels: the width it actually occupies on
+     * the frame, supersampled a little so edges and type stay crisp after the GPU downscale.
+     * Quantized so dragging the size slider redraws a handful of times, not every frame.
+     */
+    private fun packTargetPx(item: OverlayItem.Pack): Int {
+        val raw = (20f * item.scale / 100f) * streamWidth * PACK_SUPERSAMPLE
+        val stepped = ceil(raw / PACK_TARGET_STEP_PX) * PACK_TARGET_STEP_PX
+        return stepped.coerceIn(PACK_TARGET_STEP_PX, MAX_PACK_TARGET_PX).toInt()
+    }
 
     /**
      * Resolution to rasterize this overlay's text at, in output pixels: the size it actually
@@ -939,6 +1084,13 @@ class OverlayRenderer(
         // Bucket size for that target, so a slider drag re-rasterizes a few times, not always.
         const val TEXT_TARGET_STEP_PX = 512f
         const val MAX_TEXT_TARGET_PX = 3072f
+
+        // Graphics packs. A lower supersample than text: a pack is mostly filled shapes and
+        // large type, which survive the downscale better than small glyphs, and the redraw
+        // happens on every live-control tap so it has to stay cheap.
+        const val PACK_SUPERSAMPLE = 1.25f
+        const val PACK_TARGET_STEP_PX = 256f
+        const val MAX_PACK_TARGET_PX = 2048f
 
         // Banded tickers: narrowest band the renderer honours, and the point at which a band
         // is treated as edge-to-edge (which takes the cheaper quad-sliding path instead).

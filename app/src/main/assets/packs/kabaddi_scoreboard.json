@@ -1,0 +1,52 @@
+{
+  "id": "kabaddi_scoreboard",
+  "name": "Kabaddi Scoreboard",
+  "category": "SPORTS",
+  "description": "Team points with raid and tackle buttons, plus half and timer.",
+  "tier": "PRO",
+  "canvas": { "w": 1040, "h": 150 },
+  "defaultWidth": 0.55,
+  "anchor": "BOTTOM_CENTER",
+
+  "fields": [
+    { "key": "teamA", "label": "Team A", "type": "TEXT", "default": "TEAM A", "maxLen": 16, "group": "Team A" },
+    { "key": "ptsA", "label": "Points", "type": "NUMBER", "default": "0", "min": 0, "max": 199, "group": "Team A" },
+    { "key": "teamB", "label": "Team B", "type": "TEXT", "default": "TEAM B", "maxLen": 16, "group": "Team B" },
+    { "key": "ptsB", "label": "Points", "type": "NUMBER", "default": "0", "min": 0, "max": 199, "group": "Team B" },
+    { "key": "half", "label": "Half", "type": "TEXT", "default": "1st Half", "maxLen": 14, "group": "Match" },
+    { "key": "clock", "label": "Timer", "type": "TEXT", "default": "20:00", "maxLen": 8, "group": "Match" }
+  ],
+
+  "actions": [
+    { "label": "A Raid +1", "field": "ptsA", "op": "ADD", "amount": 1, "group": "Team A" },
+    { "label": "A Bonus +1", "field": "ptsA", "op": "ADD", "amount": 1, "group": "Team A" },
+    { "label": "A All Out +2", "field": "ptsA", "op": "ADD", "amount": 2, "group": "Team A" },
+    { "label": "B Raid +1", "field": "ptsB", "op": "ADD", "amount": 1, "group": "Team B" },
+    { "label": "B Bonus +1", "field": "ptsB", "op": "ADD", "amount": 1, "group": "Team B" },
+    { "label": "B All Out +2", "field": "ptsB", "op": "ADD", "amount": 2, "group": "Team B" },
+    { "label": "A −1", "field": "ptsA", "op": "ADD", "amount": -1, "group": "Correct" },
+    { "label": "B −1", "field": "ptsB", "op": "ADD", "amount": -1, "group": "Correct" },
+    { "label": "Reset", "field": "ptsA", "op": "SET", "amount": 0, "group": "Correct", "destructive": true,
+      "also": [ { "label": "", "field": "ptsB", "op": "SET", "amount": 0 } ] }
+  ],
+
+  "elements": [
+    { "kind": "RECT", "x": 0, "y": 0, "w": 1040, "h": 150, "radius": 18, "fill": "SURFACE" },
+
+    { "kind": "TEXT", "x": 36, "y": 24, "w": 300, "h": 40, "size": 32,
+      "fill": "MUTED", "text": "{teamA}", "caps": true, "tracking": 0.08 },
+    { "kind": "TEXT", "x": 36, "y": 66, "w": 300, "h": 64, "size": 58, "weight": "BOLD",
+      "fill": "ON_SURFACE", "text": "{ptsA}" },
+
+    { "kind": "RECT", "x": 372, "y": 26, "w": 296, "h": 98, "radius": 14, "fill": "ACCENT" },
+    { "kind": "TEXT", "x": 372, "y": 34, "w": 296, "h": 38, "size": 26, "align": "CENTER",
+      "fill": "ON_ACCENT", "text": "{half}", "caps": true, "tracking": 0.08 },
+    { "kind": "TEXT", "x": 372, "y": 70, "w": 296, "h": 48, "size": 42, "weight": "BOLD",
+      "align": "CENTER", "fill": "ON_ACCENT", "text": "{clock}" },
+
+    { "kind": "TEXT", "x": 704, "y": 24, "w": 300, "h": 40, "size": 32, "align": "RIGHT",
+      "fill": "MUTED", "text": "{teamB}", "caps": true, "tracking": 0.08 },
+    { "kind": "TEXT", "x": 704, "y": 66, "w": 300, "h": 64, "size": 58, "weight": "BOLD",
+      "align": "RIGHT", "fill": "ON_SURFACE", "text": "{ptsB}" }
+  ]
+}

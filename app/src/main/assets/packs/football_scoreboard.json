@@ -1,0 +1,48 @@
+{
+  "id": "football_scoreboard",
+  "name": "Football / Hockey Score",
+  "category": "SPORTS",
+  "description": "Compact two-team score bug with a period and clock. Works for football, hockey and futsal.",
+  "tier": "PRO",
+  "canvas": { "w": 900, "h": 130 },
+  "defaultWidth": 0.46,
+  "anchor": "TOP_LEFT",
+
+  "fields": [
+    { "key": "teamA", "label": "Home", "type": "TEXT", "default": "HOME", "maxLen": 12, "group": "Teams" },
+    { "key": "teamB", "label": "Away", "type": "TEXT", "default": "AWAY", "maxLen": 12, "group": "Teams" },
+    { "key": "scoreA", "label": "Home goals", "type": "NUMBER", "default": "0", "min": 0, "max": 99, "group": "Score" },
+    { "key": "scoreB", "label": "Away goals", "type": "NUMBER", "default": "0", "min": 0, "max": 99, "group": "Score" },
+    { "key": "period", "label": "Period", "type": "TEXT", "default": "1st Half", "maxLen": 16, "group": "Match" },
+    { "key": "clock", "label": "Clock", "type": "TEXT", "default": "00:00", "maxLen": 8, "group": "Match" }
+  ],
+
+  "actions": [
+    { "label": "Home +1", "field": "scoreA", "op": "ADD", "amount": 1, "group": "Goals" },
+    { "label": "Away +1", "field": "scoreB", "op": "ADD", "amount": 1, "group": "Goals" },
+    { "label": "Home −1", "field": "scoreA", "op": "ADD", "amount": -1, "group": "Correct" },
+    { "label": "Away −1", "field": "scoreB", "op": "ADD", "amount": -1, "group": "Correct" },
+    { "label": "Reset", "field": "scoreA", "op": "SET", "amount": 0, "group": "Correct", "destructive": true,
+      "also": [ { "label": "", "field": "scoreB", "op": "SET", "amount": 0 } ] }
+  ],
+
+  "elements": [
+    { "kind": "RECT", "x": 0, "y": 0, "w": 900, "h": 92, "radius": 14, "fill": "SURFACE" },
+
+    { "kind": "TEXT", "x": 32, "y": 22, "w": 250, "h": 48, "size": 40, "weight": "BOLD",
+      "fill": "ON_SURFACE", "text": "{teamA}", "caps": true, "tracking": 0.03 },
+
+    { "kind": "RECT", "x": 300, "y": 12, "w": 160, "h": 68, "radius": 10, "fill": "ACCENT" },
+    { "kind": "TEXT", "x": 300, "y": 12, "w": 160, "h": 68, "size": 46, "weight": "BOLD",
+      "align": "CENTER", "fill": "ON_ACCENT", "text": "{scoreA} - {scoreB}" },
+
+    { "kind": "TEXT", "x": 478, "y": 22, "w": 250, "h": 48, "size": 40, "weight": "BOLD",
+      "align": "RIGHT", "fill": "ON_SURFACE", "text": "{teamB}", "caps": true, "tracking": 0.03 },
+
+    { "kind": "RECT", "x": 748, "y": 12, "w": 2, "h": 68, "fill": "MUTED" },
+    { "kind": "TEXT", "x": 766, "y": 12, "w": 110, "h": 34, "size": 24, "align": "CENTER",
+      "fill": "MUTED", "text": "{period}" },
+    { "kind": "TEXT", "x": 766, "y": 44, "w": 110, "h": 38, "size": 34, "weight": "BOLD",
+      "align": "CENTER", "fill": "ON_SURFACE", "text": "{clock}" }
+  ]
+}

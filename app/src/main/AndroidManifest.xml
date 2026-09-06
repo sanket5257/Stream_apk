@@ -59,21 +59,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Home / landing (post-login) -->
+        <!-- Single-activity Compose shell: home, destinations, graphics, scenes,
+             quality, account and upgrade. Replaces the old Home/Main/Profile trio. -->
         <activity
-            android:name=".HomeActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- Profile / account -->
-        <activity
-            android:name=".ProfileActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- Advanced RTMP/quality config + go-live entry (existing pipeline) -->
-        <activity
-            android:name=".MainActivity"
+            android:name=".ui.shell.ShellActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 

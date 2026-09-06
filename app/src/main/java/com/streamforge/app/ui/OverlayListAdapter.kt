@@ -41,6 +41,29 @@ class OverlayListAdapter(
 
     private val items = mutableListOf<OverlayItem>()
 
+    /**
+     * Display name for a graphics pack, resolved from the asset catalogue. Cached per adapter
+     * so binding a long list doesn't re-read the catalogue for every row.
+     */
+    private val packNames = mutableMapOf<String, String>()
+
+    private fun packNameFor(packId: String): String = packNames.getOrPut(packId) {
+        try {
+            com.streamforge.app.packs.PackCatalog
+                .loadBlocking(itemViewContext)
+                .byId(packId)?.name ?: packId
+        } catch (t: Throwable) {
+            android.util.Log.w("OverlayListAdapter", "Couldn't resolve pack name for $packId", t)
+            packId
+        }
+    }
+
+    /**
+     * Context for catalogue lookups. Set on first bind — an adapter has no Context of its own,
+     * and the catalogue needs one to read from assets.
+     */
+    private lateinit var itemViewContext: android.content.Context
+
     // Ids of rows whose size panel is expanded. Rows are collapsed by default so many
     // overlays stay visible at once; the user expands only the one they're tuning.
     private val expandedIds = mutableSetOf<String>()
@@ -71,6 +94,7 @@ class OverlayListAdapter(
         val binding = ItemOverlayRowBinding.inflate(
             LayoutInflater.from(parent.context), parent, false
         )
+        if (!::itemViewContext.isInitialized) itemViewContext = parent.context.applicationContext
         return OverlayViewHolder(binding)
     }
 
@@ -104,6 +128,13 @@ class OverlayListAdapter(
                 is OverlayItem.Browser -> {
                     binding.tvOverlayName.text = item.url
                     binding.ivOverlayIcon.setImageResource(R.drawable.ic_link)
+                }
+                is OverlayItem.Pack -> {
+                    // Name the graphic by its definition, falling back to the raw id if the
+                    // pack was removed from assets — better a stale name than a blank row the
+                    // user can't identify to delete.
+                    binding.tvOverlayName.text = packNameFor(item.packId)
+                    binding.ivOverlayIcon.setImageResource(R.drawable.ic_layers)
                 }
             }
             bindDetails(item, item.scale, item.heightScale)

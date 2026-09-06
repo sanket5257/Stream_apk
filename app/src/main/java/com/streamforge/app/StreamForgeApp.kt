@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.streamforge.app.auth.AuthManager
 import com.streamforge.app.auth.AuthResult
+import com.streamforge.app.ui.shell.ShellActivity
 import com.streamforge.app.util.CrashReporter
 import com.streamforge.app.util.safeLaunch
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +28,7 @@ class StreamForgeApp : Application() {
         // Apply the user's saved theme (Profile -> Theme) before any UI shows.
         val mode = try {
             getSharedPreferences("ui_prefs", MODE_PRIVATE)
-                .getInt(ProfileActivity.KEY_NIGHT_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+                .getInt(ShellActivity.KEY_NIGHT_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         } catch (t: Throwable) {
             Log.w(TAG, "Reading saved theme failed; using system default", t)
             AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM

@@ -1,0 +1,35 @@
+{
+  "id": "wedding_title",
+  "name": "Wedding Title Card",
+  "category": "WEDDING",
+  "description": "Couple names and date, for the opening and closing of a ceremony stream.",
+  "tier": "PRO",
+  "canvas": { "w": 1100, "h": 340 },
+  "defaultWidth": 0.5,
+  "anchor": "CENTER",
+
+  "fields": [
+    { "key": "line1", "label": "First name", "type": "TEXT", "default": "Aarav", "maxLen": 24 },
+    { "key": "amp", "label": "Joiner", "type": "TEXT", "default": "&", "maxLen": 6 },
+    { "key": "line2", "label": "Second name", "type": "TEXT", "default": "Diya", "maxLen": 24 },
+    { "key": "date", "label": "Date / venue", "type": "TEXT", "default": "12 December 2026", "maxLen": 40 }
+  ],
+
+  "actions": [],
+
+  "elements": [
+    { "kind": "RECT", "x": 0, "y": 0, "w": 1100, "h": 340, "radius": 24, "fill": "SURFACE" },
+    { "kind": "RECT", "x": 60, "y": 44, "w": 980, "h": 2, "fill": "ACCENT" },
+    { "kind": "RECT", "x": 60, "y": 294, "w": 980, "h": 2, "fill": "ACCENT" },
+
+    { "kind": "TEXT", "x": 60, "y": 70, "w": 980, "h": 80, "size": 72, "weight": "BOLD",
+      "align": "CENTER", "fill": "ON_SURFACE", "text": "{line1}" },
+    { "kind": "TEXT", "x": 60, "y": 152, "w": 980, "h": 46, "size": 40,
+      "align": "CENTER", "fill": "ACCENT", "text": "{amp}" },
+    { "kind": "TEXT", "x": 60, "y": 196, "w": 980, "h": 80, "size": 72, "weight": "BOLD",
+      "align": "CENTER", "fill": "ON_SURFACE", "text": "{line2}" },
+
+    { "kind": "TEXT", "x": 60, "y": 300, "w": 980, "h": 34, "size": 28,
+      "align": "CENTER", "fill": "MUTED", "text": "{date}", "caps": true, "tracking": 0.16 }
+  ]
+}

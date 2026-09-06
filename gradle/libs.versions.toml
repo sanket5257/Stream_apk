@@ -4,18 +4,29 @@
 [versions]
 # Build tools
 agp = "8.5.2"
-kotlin = "1.9.24"
+# Kotlin 2.x is required for the Compose compiler Gradle plugin
+# (org.jetbrains.kotlin.plugin.compose). Before 2.0 the Compose compiler was a
+# separately-versioned artifact pinned via composeOptions; from 2.0 it ships with Kotlin
+# itself, so this version and the plugin version must always move together.
+kotlin = "2.0.21"
 
 # AndroidX core
 coreKtx = "1.13.1"
 appcompat = "1.7.0"
 activityKtx = "1.9.2"
+activityCompose = "1.9.2"
 fragmentKtx = "1.8.3"
 lifecycle = "2.8.6"
 constraintlayout = "2.1.4"
 
+# Compose. The BOM pins every androidx.compose.* artifact, so those are declared
+# without a version. 2024.09.03 is the last BOM verified against Kotlin 2.0.21.
+composeBom = "2024.09.03"
+navigationCompose = "2.8.2"
+
 # UI
 material = "1.12.0"
+coil = "2.7.0"
 
 # Storage
 datastore = "1.1.1"
@@ -42,14 +53,32 @@ espresso = "3.6.1"
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-fragment-ktx = { module = "androidx.fragment:fragment-ktx", version.ref = "fragmentKtx" }
 androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 
+# Compose — versions come from the BOM below.
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui" }
+androidx-compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
+androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+androidx-compose-foundation = { module = "androidx.compose.foundation:foundation" }
+androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
+# The icon pack: ~2000 Material Symbols as Compose ImageVectors. R8 strips the unused
+# ones from release builds, so referencing it does not bloat the shipped APK.
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+
 # UI
 material = { module = "com.google.android.material:material", version.ref = "material" }
+coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
+
 
 # Storage
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
@@ -73,3 +102,4 @@ androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", vers
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

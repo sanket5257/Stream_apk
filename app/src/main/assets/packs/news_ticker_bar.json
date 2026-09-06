@@ -1,0 +1,29 @@
+{
+  "id": "news_ticker_bar",
+  "name": "Headline Bar",
+  "category": "NEWS",
+  "description": "Branded headline strip. Keep a list of headlines and tap Next to move through them on air.",
+  "tier": "PRO",
+  "canvas": { "w": 1920, "h": 110 },
+  "defaultWidth": 1.0,
+  "anchor": "BOTTOM_CENTER",
+
+  "fields": [
+    { "key": "brand", "label": "Channel / label", "type": "TEXT", "default": "LIVE", "maxLen": 14 },
+    { "key": "headlines", "label": "Headlines (one per line)", "type": "LINES",
+      "default": "Welcome to the broadcast", "maxLen": 400 }
+  ],
+
+  "actions": [
+    { "label": "Next headline", "field": "headlines", "op": "CYCLE", "group": "Headlines" }
+  ],
+
+  "elements": [
+    { "kind": "RECT", "x": 0, "y": 0, "w": 1920, "h": 110, "radius": 0, "fill": "SURFACE" },
+    { "kind": "RECT", "x": 0, "y": 0, "w": 300, "h": 110, "radius": 0, "fill": "ACCENT" },
+    { "kind": "TEXT", "x": 0, "y": 0, "w": 300, "h": 110, "size": 46, "weight": "BOLD",
+      "align": "CENTER", "fill": "ON_ACCENT", "text": "{brand}", "caps": true, "tracking": 0.08 },
+    { "kind": "TEXT", "x": 340, "y": 0, "w": 1540, "h": 110, "size": 48,
+      "fill": "ON_SURFACE", "text": "{headlines}", "minScale": 0.55 }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "id": "cricket_scoreboard",
+  "name": "Cricket Scoreboard",
+  "category": "SPORTS",
+  "description": "Two-team score bar with runs, wickets and overs. Score it live from the camera screen.",
+  "tier": "PRO",
+  "canvas": { "w": 1200, "h": 160 },
+  "defaultWidth": 0.62,
+  "anchor": "BOTTOM_LEFT",
+
+  "fields": [
+    { "key": "teamA", "label": "Team A", "type": "TEXT", "default": "IND", "maxLen": 14, "group": "Team A" },
+    { "key": "runsA", "label": "Runs", "type": "NUMBER", "default": "0", "min": 0, "max": 999, "group": "Team A" },
+    { "key": "wktsA", "label": "Wickets", "type": "NUMBER", "default": "0", "min": 0, "max": 10, "group": "Team A" },
+    { "key": "teamB", "label": "Team B", "type": "TEXT", "default": "AUS", "maxLen": 14, "group": "Team B" },
+    { "key": "runsB", "label": "Runs", "type": "NUMBER", "default": "0", "min": 0, "max": 999, "group": "Team B" },
+    { "key": "wktsB", "label": "Wickets", "type": "NUMBER", "default": "0", "min": 0, "max": 10, "group": "Team B" },
+    { "key": "ov", "label": "Overs", "type": "NUMBER", "default": "0", "min": 0, "max": 99, "group": "Match" },
+    { "key": "bl", "label": "Balls", "type": "NUMBER", "default": "0", "min": 0, "max": 5, "group": "Match" },
+    { "key": "status", "label": "Note", "type": "TEXT", "default": "", "maxLen": 28, "group": "Match" }
+  ],
+
+  "actions": [
+    { "label": "+1", "field": "runsA", "op": "ADD", "amount": 1, "group": "Batting",
+      "also": [ { "label": "", "field": "bl", "op": "ADD", "amount": 1 } ] },
+    { "label": "+2", "field": "runsA", "op": "ADD", "amount": 2, "group": "Batting",
+      "also": [ { "label": "", "field": "bl", "op": "ADD", "amount": 1 } ] },
+    { "label": "+4", "field": "runsA", "op": "ADD", "amount": 4, "group": "Batting",
+      "also": [ { "label": "", "field": "bl", "op": "ADD", "amount": 1 } ] },
+    { "label": "+6", "field": "runsA", "op": "ADD", "amount": 6, "group": "Batting",
+      "also": [ { "label": "", "field": "bl", "op": "ADD", "amount": 1 } ] },
+    { "label": "Dot", "field": "bl", "op": "ADD", "amount": 1, "group": "Batting" },
+    { "label": "Wicket", "field": "wktsA", "op": "ADD", "amount": 1, "group": "Batting",
+      "also": [ { "label": "", "field": "bl", "op": "ADD", "amount": 1 } ] },
+    { "label": "Over", "field": "ov", "op": "ADD", "amount": 1, "group": "Match",
+      "also": [ { "label": "", "field": "bl", "op": "SET", "amount": 0 } ] },
+    { "label": "Undo run", "field": "runsA", "op": "ADD", "amount": -1, "group": "Match" },
+    { "label": "Reset", "field": "runsA", "op": "SET", "amount": 0, "group": "Match", "destructive": true,
+      "also": [
+        { "label": "", "field": "wktsA", "op": "SET", "amount": 0 },
+        { "label": "", "field": "ov", "op": "SET", "amount": 0 },
+        { "label": "", "field": "bl", "op": "SET", "amount": 0 }
+      ] }
+  ],
+
+  "elements": [
+    { "kind": "RECT", "x": 0, "y": 0, "w": 1200, "h": 160, "radius": 20, "fill": "SURFACE" },
+    { "kind": "RECT", "x": 0, "y": 0, "w": 14, "h": 160, "radius": 7, "fill": "ACCENT" },
+
+    { "kind": "TEXT", "x": 44, "y": 26, "w": 250, "h": 46, "size": 40, "weight": "BOLD",
+      "fill": "ON_SURFACE", "text": "{teamA}", "caps": true, "tracking": 0.02 },
+    { "kind": "TEXT", "x": 44, "y": 76, "w": 250, "h": 62, "size": 54, "weight": "BOLD",
+      "fill": "ACCENT", "text": "{runsA}/{wktsA}" },
+
+    { "kind": "RECT", "x": 330, "y": 32, "w": 2, "h": 96, "fill": "MUTED" },
+
+    { "kind": "TEXT", "x": 364, "y": 30, "w": 170, "h": 32, "size": 24,
+      "fill": "MUTED", "text": "OVERS", "tracking": 0.09 },
+    { "kind": "TEXT", "x": 364, "y": 66, "w": 170, "h": 64, "size": 48, "weight": "BOLD",
+      "fill": "ON_SURFACE", "text": "{ov}.{bl}" },
+
+    { "kind": "RECT", "x": 556, "y": 32, "w": 2, "h": 96, "fill": "MUTED" },
+
+    { "kind": "TEXT", "x": 590, "y": 26, "w": 250, "h": 46, "size": 40, "weight": "BOLD",
+      "fill": "ON_SURFACE", "text": "{teamB}", "caps": true, "tracking": 0.02 },
+    { "kind": "TEXT", "x": 590, "y": 76, "w": 250, "h": 62, "size": 54, "weight": "BOLD",
+      "fill": "MUTED", "text": "{runsB}/{wktsB}" },
+
+    { "kind": "TEXT", "x": 870, "y": 50, "w": 290, "h": 60, "size": 32, "align": "RIGHT",
+      "fill": "MUTED", "text": "{status}", "showIf": "status" }
+  ]
+}

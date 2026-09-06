@@ -132,6 +132,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                     is OverlayItem.Gif -> item.copy().also { it.visible = !item.visible }
                     is OverlayItem.Video -> item.copy().also { it.visible = !item.visible }
                     is OverlayItem.Browser -> item.copy().also { it.visible = !item.visible }
+                    is OverlayItem.Pack -> item.copy().also { it.visible = !item.visible }
                 }
                 mutateStore { overlayStore.updateOverlay(toggled) }
             },
@@ -142,6 +143,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
                     is OverlayItem.Gif -> item.copy().also { it.locked = !item.locked }
                     is OverlayItem.Video -> item.copy().also { it.locked = !item.locked }
                     is OverlayItem.Browser -> item.copy().also { it.locked = !item.locked }
+                    is OverlayItem.Pack -> item.copy().also { it.locked = !item.locked }
                 }
                 mutateStore { overlayStore.updateOverlay(toggled) }
             },
@@ -453,6 +455,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         is OverlayItem.Gif -> copy().also { it.scale = scale }
         is OverlayItem.Video -> copy().also { it.scale = scale }
         is OverlayItem.Browser -> copy().also { it.scale = scale }
+        is OverlayItem.Pack -> copy().also { it.scale = scale }
     }
 
     /** Returns a copy of this overlay with [heightScale] applied, preserving other fields. */
@@ -462,6 +465,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         is OverlayItem.Gif -> copy().also { it.heightScale = heightScale }
         is OverlayItem.Video -> copy().also { it.heightScale = heightScale }
         is OverlayItem.Browser -> copy().also { it.heightScale = heightScale }
+        is OverlayItem.Pack -> copy().also { it.heightScale = heightScale }
     }
 
     /**
@@ -476,6 +480,7 @@ class OverlayManagerBottomSheet : BottomSheetDialogFragment() {
         is OverlayItem.Gif -> copy().also { it.scale = scale; it.heightScale = scale }
         is OverlayItem.Video -> copy().also { it.scale = scale; it.heightScale = scale }
         is OverlayItem.Browser -> copy().also { it.scale = scale; it.heightScale = scale }
+        is OverlayItem.Pack -> copy().also { it.scale = scale; it.heightScale = scale }
     }
 
     override fun onDestroyView() {

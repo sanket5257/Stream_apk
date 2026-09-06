@@ -11,3 +11,15 @@ SUPABASE_URL=https://xxxxxxxxxxxxx.supabase.co
 SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your_actual_key_here
 
 # Note: The anon key is safe to use in client apps when combined with Row Level Security (RLS)
+
+# ---------------------------------------------------------------------------
+# Licence sales contact. The app has no payment gateway: the Upgrade screen
+# shows the plans and then hands off to whichever of these you fill in.
+# Any field left blank hides its button.
+#
+# SUPPORT_WHATSAPP: full international number, digits only, no + or spaces.
+#                   e.g. 919876543210 for +91 98765 43210
+# ---------------------------------------------------------------------------
+SUPPORT_WHATSAPP=
+SUPPORT_PHONE=
+SUPPORT_EMAIL=

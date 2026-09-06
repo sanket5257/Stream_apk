@@ -1,0 +1,32 @@
+{
+  "id": "lower_third",
+  "name": "Lower Third",
+  "category": "NEWS",
+  "description": "Name and title bar for interviews, presenters and guests. Free to use.",
+  "tier": "FREE",
+  "canvas": { "w": 1000, "h": 190 },
+  "defaultWidth": 0.52,
+  "anchor": "BOTTOM_LEFT",
+
+  "fields": [
+    { "key": "name", "label": "Name", "type": "TEXT", "default": "Your Name", "maxLen": 32 },
+    { "key": "title", "label": "Title / role", "type": "TEXT", "default": "Reporter", "maxLen": 40 },
+    { "key": "logo", "label": "Logo", "type": "IMAGE", "default": "" }
+  ],
+
+  "actions": [],
+
+  "elements": [
+    { "kind": "RECT", "x": 0, "y": 12, "w": 940, "h": 96, "radius": 12, "fill": "SURFACE" },
+    { "kind": "RECT", "x": 0, "y": 12, "w": 10, "h": 96, "radius": 5, "fill": "ACCENT" },
+
+    { "kind": "TEXT", "x": 36, "y": 22, "w": 760, "h": 76, "size": 58, "weight": "BOLD",
+      "fill": "ON_SURFACE", "text": "{name}" },
+
+    { "kind": "RECT", "x": 0, "y": 116, "w": 640, "h": 58, "radius": 10, "fill": "ACCENT" },
+    { "kind": "TEXT", "x": 36, "y": 116, "w": 570, "h": 58, "size": 34,
+      "fill": "ON_ACCENT", "text": "{title}", "caps": true, "tracking": 0.06 },
+
+    { "kind": "IMAGE", "x": 836, "y": 24, "w": 72, "h": 72, "imageField": "logo", "showIf": "logo" }
+  ]
+}

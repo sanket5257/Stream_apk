@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
     id("kotlin-parcelize")
 }
 
@@ -31,8 +32,8 @@ android {
         targetSdk = 34
         // versionCode is the ONLY value Android compares when installing an update — it must
         // increase every release or the install is rejected as a downgrade. See RELEASING.md.
-        versionCode = 3
-        versionName = "0.2.1"
+        versionCode = 4
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -55,6 +56,23 @@ android {
             ?: System.getenv("UPDATE_MANIFEST_URL")
             ?: ""
         buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"")
+
+        // How customers reach you to buy a licence. There is no payment gateway in the app:
+        // the Upgrade screen shows the plans and then hands off to these. Any field left
+        // blank simply hides its button, so a build with none of them set still works — it
+        // just can't sell anything. Set them in local.properties.
+        buildConfigField(
+            "String", "SUPPORT_WHATSAPP",
+            "\"${localProps.getProperty("SUPPORT_WHATSAPP") ?: System.getenv("SUPPORT_WHATSAPP") ?: ""}\""
+        )
+        buildConfigField(
+            "String", "SUPPORT_PHONE",
+            "\"${localProps.getProperty("SUPPORT_PHONE") ?: System.getenv("SUPPORT_PHONE") ?: ""}\""
+        )
+        buildConfigField(
+            "String", "SUPPORT_EMAIL",
+            "\"${localProps.getProperty("SUPPORT_EMAIL") ?: System.getenv("SUPPORT_EMAIL") ?: ""}\""
+        )
     }
 
     signingConfigs {
@@ -99,8 +117,11 @@ android {
     }
 
     buildFeatures {
+        // viewBinding stays on: the Compose migration is incremental, and the camera
+        // screen still hosts RootEncoder's OpenGlView + OverlayEditorView from XML.
         viewBinding = true
         buildConfig = true
+        compose = true
     }
 
     packaging {
@@ -119,6 +140,27 @@ android {
 }
 
 dependencies {
+    // Compose. platform() must be applied BEFORE the artifacts the BOM pins, and to every
+    // configuration that resolves Compose — androidTest included, or the test variant
+    // resolves unpinned versions.
+    implementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.material3)
+    // Icon pack: Material Symbols as Compose ImageVectors, used across the new UI.
+    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Image loading for overlay + graphics-pack thumbnails.
+    implementation(libs.coil.compose)
+
     // AndroidX core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

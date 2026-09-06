@@ -145,6 +145,9 @@ class OverlayEditorView @JvmOverloads constructor(
                     is OverlayItem.Gif -> gifPaint
                     is OverlayItem.Video -> videoPaint
                     is OverlayItem.Browser -> browserPaint
+                    // Graphics packs are drawn by the GL pipeline like any other textured
+                    // overlay; the editor only needs a placeholder fill in dev mode.
+                    is OverlayItem.Pack -> imagePaint
                 }
                 canvas.drawRect(rect, fill)
                 if (item is OverlayItem.Text) {

@@ -109,6 +109,37 @@ sealed class OverlayItem {
     ) : OverlayItem()
 
     /**
+     * Graphics Pack overlay — a designed, data-driven broadcast graphic (scoreboard, lower
+     * third, ticker). See `packs/PackModels.kt`.
+     *
+     * The pack's definition lives in `assets/packs/`, so only the instance data is persisted
+     * here: which pack, what the user typed into its fields, and which colourway. The whole
+     * graphic rasterizes to ONE bitmap (see PackRasterizer) and is then treated exactly like
+     * an image overlay by the GL pipeline — same transform maths, same texture healing.
+     *
+     * [values] changing is the live-control path: tapping "+4" writes a new value here and the
+     * renderer re-rasterizes, on air, without touching the encoder.
+     */
+    @Serializable
+    data class Pack(
+        override val id: String,
+        /** Id of the [com.streamforge.app.packs.GraphicsPack] this instance renders. */
+        val packId: String,
+        /** Field key → user value. Missing keys fall back to the pack's declared defaults. */
+        val values: Map<String, String> = emptyMap(),
+        /** Colourway key; see PackTheme.ALL. */
+        val themeKey: String = "broadcast_navy",
+        override var x: Float = 0.5f,
+        override var y: Float = 0.85f,
+        override var scale: Float = 3f,
+        override var heightScale: Float = 3f,
+        override var rotation: Float = 0f,
+        override var zIndex: Int = 0,
+        override var visible: Boolean = true,
+        override var locked: Boolean = false
+    ) : OverlayItem()
+
+    /**
      * Browser / URL overlay. A live web page (e.g. a StreamElements alert or chat box URL)
      * is rendered off-screen in a WebView and composited into the stream. The render canvas
      * defaults to StreamElements' native 1920×1080 so widget sizes/positions reproduce the

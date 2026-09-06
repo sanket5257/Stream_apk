@@ -4,7 +4,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.os.Build
 import android.util.Log
-import com.pedro.library.rtmp.RtmpCamera2
+import com.pedro.library.base.Camera2Base
 import java.lang.reflect.Field
 
 /**
@@ -23,7 +23,7 @@ object MicAudioHelper {
     private const val TAG = "MicAudioHelper"
 
     fun applyPreferredDevice(
-        camera: RtmpCamera2,
+        camera: Camera2Base,
         deviceId: Int,
         audioManager: AudioManager
     ): Boolean {
