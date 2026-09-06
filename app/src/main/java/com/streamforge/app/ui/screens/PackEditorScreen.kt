@@ -91,14 +91,25 @@ fun PackEditorScreen(
     // Re-render the preview whenever the content changes. Off the main thread: this is real
     // bitmap work, and doing it in composition would jank every keystroke.
     LaunchedEffect(values, themeKey) {
-        preview = withContext(Dispatchers.Default) {
-            PackRasterizer.render(
-                context = context,
-                pack = definition,
-                values = values,
-                theme = PackTheme.byKey(themeKey),
-                targetWidthPx = PREVIEW_WIDTH_PX,
-            )?.bitmap
+        // Guarded: an exception inside a LaunchedEffect is not contained by Compose — it
+        // propagates out of the composition's coroutine and ends the process. The rasterizer
+        // handles its own failures, but the theme lookup and bitmap hand-off sit outside it,
+        // and a dead preview is never worth closing the app over.
+        preview = try {
+            withContext(Dispatchers.Default) {
+                PackRasterizer.render(
+                    context = context,
+                    pack = definition,
+                    values = values,
+                    theme = PackTheme.byKey(themeKey),
+                    targetWidthPx = PREVIEW_WIDTH_PX,
+                )?.bitmap
+            }
+        } catch (t: Throwable) {
+            android.util.Log.e("PackEditor", "Rendering the preview failed", t)
+            com.streamforge.app.util.CrashReporter
+                .recordNonFatal("PackEditor", "rendering the preview", t)
+            null
         }
     }
 

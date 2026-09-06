@@ -146,18 +146,30 @@ fun GraphicsScreen(
     }
 }
 
-/** One-line description of an instance: what it currently says on air. */
+/**
+ * One-line description of an instance: what it currently says on air.
+ *
+ * Guarded because this runs during composition, reading a pack definition that came off disk.
+ * A malformed or half-written pack would otherwise throw on the way to drawing the row, and a
+ * throw in composition is not something a click guard can catch — it takes the screen, and
+ * with it the app. A row with a generic subtitle is a far better outcome.
+ */
 private fun summaryFor(definition: GraphicsPack?, overlay: OverlayItem.Pack): String {
     if (definition == null) return "This graphic is no longer available"
-    val values = definition.defaultValues() + overlay.values
-    // Show the first couple of text-ish fields — for a scoreboard that's the two team names,
-    // which is exactly how the user thinks of "which scoreboard is this".
-    val preview = definition.fields
-        .filter { it.type.name == "TEXT" }
-        .mapNotNull { values[it.key]?.takeIf { v -> v.isNotBlank() } }
-        .take(2)
-        .joinToString(" · ")
-    return preview.ifBlank { definition.description }
+    return runCatching {
+        val values = definition.defaultValues() + overlay.values
+        // Show the first couple of text-ish fields — for a scoreboard that's the two team names,
+        // which is exactly how the user thinks of "which scoreboard is this".
+        val preview = definition.fields
+            .filter { it.type.name == "TEXT" }
+            .mapNotNull { values[it.key]?.takeIf { v -> v.isNotBlank() } }
+            .take(2)
+            .joinToString(" · ")
+        preview.ifBlank { definition.description }
+    }.getOrElse {
+        android.util.Log.e("GraphicsScreen", "Summarising pack ${overlay.packId} failed", it)
+        definition.description
+    }
 }
 
 private fun PackTier.badgeLabel(): String = when (this) {

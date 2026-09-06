@@ -237,14 +237,25 @@ private fun SceneCard(
     }
 }
 
-/** Human name for an overlay in the scene list. */
-private fun OverlayItem.describe(catalog: List<GraphicsPack>): String = when (this) {
-    is OverlayItem.Pack -> catalog.firstOrNull { it.id == packId }?.name ?: "Graphic"
-    is OverlayItem.Text -> text.take(28).ifBlank { "Text" }
-    is OverlayItem.Image -> "Image"
-    is OverlayItem.Gif -> "GIF"
-    is OverlayItem.Video -> "Video"
-    is OverlayItem.Browser -> "Web overlay"
+/**
+ * Human name for an overlay in the scene list.
+ *
+ * Guarded for the same reason as GraphicsScreen's summary: this runs during composition over
+ * data loaded from disk, and a throw there takes the whole screen down rather than surfacing
+ * as a failed action. A row labelled "Graphic" is always better than a closed app.
+ */
+private fun OverlayItem.describe(catalog: List<GraphicsPack>): String = runCatching {
+    when (this) {
+        is OverlayItem.Pack -> catalog.firstOrNull { it.id == packId }?.name ?: "Graphic"
+        is OverlayItem.Text -> text.take(28).ifBlank { "Text" }
+        is OverlayItem.Image -> "Image"
+        is OverlayItem.Gif -> "GIF"
+        is OverlayItem.Video -> "Video"
+        is OverlayItem.Browser -> "Web overlay"
+    }
+}.getOrElse {
+    android.util.Log.e("ScenesScreen", "Describing overlay $id failed", it)
+    "Graphic"
 }
 
 @Composable
